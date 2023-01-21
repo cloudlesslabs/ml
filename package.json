@@ -15,6 +15,8 @@
     "./linalg/qr": "./src/linalg/qr.mjs",
     "./linalg/rank": "./src/linalg/rank.mjs",
     "./linalg/svd": "./src/linalg/svd.mjs",
+    "./regression": "./src/regression/index.mjs",
+    "./regression/nonlinear": "./src/regression/nonlinear.mjs",
     "./package.json": "./package.json"
   },
   "repository": {

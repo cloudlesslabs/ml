@@ -10,7 +10,7 @@
 // To only run a test, use 'it.only' instead of 'it'.
 
 import { assert } from 'chai'
-import { det, rank, inverse, mult, isIdentity, backward } from '../src/linalg/index.mjs'
+import { det, rank, inverse, mult, isIdentity, backward, qr, isUpperTriangular, transpose, apply, isZero } from '../src/linalg/index.mjs'
 // import { default as Matrix } from '@rayyamhk/matrix'
 
 describe('linalg', () => {
@@ -73,7 +73,7 @@ describe('linalg', () => {
 		})
 	})
 	describe('backward', () => {
-		it.only('Should compute backward substitution on upper triangular matrix equation', () => {
+		it('Should compute backward substitution on upper triangular matrix equation', () => {
 			const A = [
 				[1,2],
 				[0,4]
@@ -95,6 +95,33 @@ describe('linalg', () => {
 
 			assert.deepEqual(coeffsAbis, coeffsA)
 			assert.deepEqual(coeffsCbis, coeffsC)
+		})
+	})
+	describe('qr', () => {
+		it('Should decompose matrices in QR matrices', () => {
+			const A = [[1,2],[3,4]]
+			const B = [[1,2,3],[4,5,6],[7,8,9]]
+			const C = [
+				[1 , 2 , 3 , 4 , 5 , 6 ],
+				[11, 12, 33, 54, 3 , 4 ],
+				[3 , 9 , 17, 43, 61, 2 ],
+				[7 , 21, 21, 7 , 23, 2 ],
+				[21, 8 , 87, 3 , 34, 3 ],
+				[14, 5 , 0 , 1 , 9 , 18]]
+
+			const [Qa, Ra] = qr(A)
+			const [Qb, Rb] = qr(B)
+			const [Qc, Rc] = qr(C)
+
+			assert.deepEqual(apply(mult(Qa, Ra), A, (a,b) => isZero(a-b) ? 0 : 1), apply(A,A,() => 0))
+			assert.isOk(isUpperTriangular(Ra))
+			assert.isOk(isIdentity(mult(Qa,transpose(Qa))))
+			assert.deepEqual(apply(mult(Qb, Rb), B, (a,b) => isZero(a-b) ? 0 : 1), apply(B,B,() => 0))
+			assert.isOk(isUpperTriangular(Rb))
+			assert.isOk(isIdentity(mult(Qb,transpose(Qb))))
+			assert.deepEqual(apply(mult(Qc, Rc), C, (a,b) => isZero(a-b) ? 0 : 1), apply(C,C,() => 0))
+			assert.isOk(isUpperTriangular(Rc))
+			assert.isOk(isIdentity(mult(Qc,transpose(Qc))))
 		})
 	})
 })

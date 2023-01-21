@@ -223,6 +223,42 @@ export const isUpperTriangular = A => {
 	return yes
 }
 
+export const apply = (A,B,transform) => {
+	if (!A)
+		throw new Error('Missing required matrix \'A\'')
+	if (!B)
+		throw new Error('Missing required matrix \'B\'')
+	if (!transform)
+		throw new Error('Missing required function \'transform\'')
+	const tf = typeof(transform)
+	if (tf != 'function')
+		throw new Error(`Wrong argument exception. 'transform' is expected to be a function. Found ${tf} instead.`)
+	if (!A[0])
+		throw new Error('Wrong argument exception. A cannot be empty')
+	if (!B[0])
+		throw new Error('Wrong argument exception. B cannot be empty')
+	
+	const [rowA, colA] = [A.length, A[0].length]
+	const [rowB, colB] = [B.length, B[0].length]
+	
+	if (rowA != rowB)
+		throw new Error('Incompatible matrices size. A does not have the same number of rows as B.')
+	if (colA != colB)
+		throw new Error('Incompatible matrices size. A does not have the same number of columns as B.')
+
+	const result = Array(rowA).fill(0).map(() => Array(colA))
+	for (let i=0;i<rowA;i++) {
+		const row = result[i]
+		const rA = A[i]
+		const rB = B[i]
+		for (let j=0;j<rowA;j++)
+			row[j] = transform(rA[j], rB[j], i, j)
+	}
+
+	return result
+}
+
+
 
 
 

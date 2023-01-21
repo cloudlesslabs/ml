@@ -34,6 +34,7 @@
  * SOFTWARE.
 */
 
+import { catchErrors, wrapErrors as e, mergeErrors } from 'puffy-core/error'
 import { reshape, generate, EPSILON } from '../matrix/utils.mjs'
 
 /**
@@ -53,56 +54,62 @@ import { reshape, generate, EPSILON } from '../matrix/utils.mjs'
  * @returns {Matrix[]} The LUP decomposition of Matrix
  */
 export default function LU(data, optimized = false) {
-	if (!data)
-		throw new Error('Missing required argument \'data\'')
-	if ((!data.length))
-		throw new Error('Wrong argument exception. \'data\' canot be empty')
+	const [errors, resp] = catchErrors('Failed to compute LU decomposition', () => {
+		if (!data)
+			throw e('Missing required argument \'data\'')
+		if ((!data.length))
+			throw e('Wrong argument exception. \'data\' canot be empty')
 
-	const matrix = Array.isArray(data[0]) ? data : reshape(data).matrix
-	const row = matrix.length
-	const col = matrix[0].length
-	const size = Math.min(row, col)
-	
-	const permutation = initPermutation(row)
-	const copy = matrix.map(row => ([...row]))
+		const matrix = Array.isArray(data[0]) ? data : reshape(data).matrix
+		const row = matrix.length
+		const col = matrix[0].length
+		const size = Math.min(row, col)
+		
+		const permutation = initPermutation(row)
+		const copy = matrix.map(row => ([...row]))
 
-	for (let i = 0; i < row - 1; i++) {
-		const currentCol = Math.min(i, col)
+		for (let i = 0; i < row - 1; i++) {
+			const currentCol = Math.min(i, col)
 
-		// apply Partial Pivoting
-		PartialPivoting(copy, permutation, currentCol, row, col)
+			// apply Partial Pivoting
+			PartialPivoting(copy, permutation, currentCol, row, col)
 
-		const ith = permutation[i]
-		const pivot = copy[ith][currentCol]
+			const ith = permutation[i]
+			const pivot = copy[ith][currentCol]
 
-		if (Math.abs(pivot) < EPSILON)
-			continue
+			if (Math.abs(pivot) < EPSILON)
+				continue
 
-		for (let j = i + 1; j < row; j++) {
-			const jth = permutation[j]
-			const entry = copy[jth][currentCol]
+			for (let j = i + 1; j < row; j++) {
+				const jth = permutation[j]
+				const entry = copy[jth][currentCol]
 
-			if (Math.abs(entry) >= EPSILON) {
-				const factor = entry / pivot
-				for (let k = currentCol; k < col; k++)
-					copy[jth][k] -= factor * copy[ith][k]
-				copy[jth][currentCol] = factor
+				if (Math.abs(entry) >= EPSILON) {
+					const factor = entry / pivot
+					for (let k = currentCol; k < col; k++)
+						copy[jth][k] -= factor * copy[ith][k]
+					copy[jth][currentCol] = factor
+				}
 			}
 		}
-	}
 
-	const result = new Array(row)
-	for (let i = 0; i < row; i++)
-		result[i] = copy[permutation[i]]
+		const result = new Array(row)
+		for (let i = 0; i < row; i++)
+			result[i] = copy[permutation[i]]
 
-	if (optimized)
-		return [permutation, result]
+		if (optimized)
+			return [permutation, result]
 
-	const P = generate(row, row, (i, j) => permutation[i] === j ? 1 : 0)
-	const L = generate(row, size, (i, j) => i === j ? 1 : i < j ? 0 : result[i][j])
-	const U = generate(size, col, (i, j) => i > j ? 0 : result[i][j])
+		const P = generate(row, row, (i, j) => permutation[i] === j ? 1 : 0)
+		const L = generate(row, size, (i, j) => i === j ? 1 : i < j ? 0 : result[i][j])
+		const U = generate(size, col, (i, j) => i > j ? 0 : result[i][j])
 
-	return [P, L, U]
+		return [P, L, U]
+	})
+	if (errors)
+		throw mergeErrors(errors)
+	else
+		return resp
 }
 
 const initPermutation = size => {

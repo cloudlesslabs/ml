@@ -34,45 +34,52 @@
  * SOFTWARE.
 */
 
+import { catchErrors, wrapErrors as e, mergeErrors } from 'puffy-core/error'
 import { isUpperTriangular, isZero, reshape } from '../matrix/utils.mjs'
 
 export default function backward(data, y) {
-	if (!data)
-		throw new Error('Missing required argument \'data\'')
-	if (!y)
-		throw new Error('Missing required argument \'y\'')
-	const yl = y.length
-	if (!yl)
-		throw new Error('Wrong argument exception. \'y\' cannot be an empty array.')
-	if ((!data.length))
-		throw new Error('Wrong argument exception. \'data\' canot be empty')
+	const [errors, resp] = catchErrors('Failed to run backward substitution', () => {
+		if (!data)
+			throw e('Missing required argument \'data\'')
+		if (!y)
+			throw e('Missing required argument \'y\'')
+		const yl = y.length
+		if (!yl)
+			throw e('Wrong argument exception. \'y\' cannot be an empty array.')
+		if ((!data.length))
+			throw e('Wrong argument exception. \'data\' canot be empty')
 
-	const U = Array.isArray(data[0]) ? data : reshape(data).matrix
-	const Y = Array.isArray(y[0]) ? y : y.map(v => ([v]))
-	if (!isUpperTriangular(U))
-		throw new Error('Failed to run backward substitution. Matrix is not square upper triangular.')
+		const U = Array.isArray(data[0]) ? data : reshape(data).matrix
+		const Y = Array.isArray(y[0]) ? y : y.map(v => ([v]))
+		if (!isUpperTriangular(U))
+			throw e('Matrix is not square upper triangular.')
 
-	const size = U.length
+		const size = U.length
 
-	if (yl !== size)
-		throw new Error(`Incompatible size error. The square upper triangular matrix U (size: ${size}) is not compatible with the Y vector (length: ${yl}).`)
+		if (yl !== size)
+			throw e(`Incompatible size error. The square upper triangular matrix U (size: ${size}) is not compatible with the Y vector (length: ${yl}).`)
 
-	for (let i = 0; i < size; i++)
-		if (isZero(U[i][i]))
-			throw new Error('Failed to run backward substitution. The square upper triangular matrix U contains one or more diagonal values equal to zero, which will lead to non unique solutions.')
+		for (let i = 0; i < size; i++)
+			if (isZero(U[i][i]))
+				throw e('The square upper triangular matrix U contains one or more diagonal values equal to zero, which will lead to non unique solutions.')
 
-	const coefficients = Array(size).fill(1).map(v => ([v]))
+		const coefficients = Array(size).fill(1).map(v => ([v]))
 
-	for (let i = size - 1; i >= 0; i--) {
-		const Urow = U[i]
-		let summation = 0
-		for (let j = i + 1; j < size; j++)
-			summation += coefficients[j][0] * Urow[j]
+		for (let i = size - 1; i >= 0; i--) {
+			const Urow = U[i]
+			let summation = 0
+			for (let j = i + 1; j < size; j++)
+				summation += coefficients[j][0] * Urow[j]
 
-		coefficients[i][0] = (Y[i][0] - summation) / Urow[i]
-	}
+			coefficients[i][0] = (Y[i][0] - summation) / Urow[i]
+		}
 
-	return coefficients
+		return coefficients
+	})
+	if (errors)
+		throw mergeErrors(errors)
+	else
+		return resp
 }
 
 
