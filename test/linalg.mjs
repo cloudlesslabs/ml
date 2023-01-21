@@ -1,0 +1,100 @@
+/**
+ * Copyright (c) 2019-2023, Cloudless Consulting Pty Ltd.
+ * All rights reserved.
+ * 
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree.
+*/
+
+// To skip a test, either use 'xit' instead of 'it', or 'describe.skip' instead of 'describe'.
+// To only run a test, use 'it.only' instead of 'it'.
+
+import { assert } from 'chai'
+import { det, rank, inverse, mult, isIdentity, backward } from '../src/linalg/index.mjs'
+// import { default as Matrix } from '@rayyamhk/matrix'
+
+describe('linalg', () => {
+	describe('det', () => {
+		it('Should compute the determinant of square marices', () => {
+			const A = [1,2,3,4]
+			const detA = -2
+			const B = [1,2,3,4,5,6,7,8,9]
+			const detB = 0
+			const C = [
+				1 , 2 , 3 , 4 , 5 , 6 ,
+				11, 12, 33, 54, 3 , 4 ,
+				3 , 9 , 17, 43, 61, 2 ,
+				7 , 21, 21, 7 , 23, 2 ,
+				21, 8 , 87, 3 , 34, 3 ,
+				14, 5 , 0 , 1 , 9 , 18]
+			const detC = -387953848
+
+			assert.equal(det(A), detA)
+			assert.equal(det(B), detB)
+			assert.equal(det(C), detC)
+		})
+	})
+	describe('rank', () => {
+		it('Should compute the rank of a matrix', () => {
+			const A = [1,2,3,4]
+			const B = [1,2,3,4,5,6,7,8,9]
+			const C = [
+				1 , 2 , 3 , 4 , 5 , 6 ,
+				11, 12, 33, 54, 3 , 4 ,
+				3 , 9 , 17, 43, 61, 2 ,
+				7 , 21, 21, 7 , 23, 2 ,
+				21, 8 , 87, 3 , 34, 3 ,
+				14, 5 , 0 , 1 , 9 , 18]
+
+			assert.equal(rank(A), 2)
+			assert.equal(rank(B), 2)
+			assert.equal(rank(C), 6)
+		})
+	})
+	describe('inverse', () => {
+		it('Should compute the inverse of a matrix', () => {
+			const A = [1,2,3,4]
+			const B = [1,2,3,4,5,6,7,8,9]
+			const C = [
+				1 , 2 , 3 , 4 , 5 , 6 ,
+				11, 12, 33, 54, 3 , 4 ,
+				3 , 9 , 17, 43, 61, 2 ,
+				7 , 21, 21, 7 , 23, 2 ,
+				21, 8 , 87, 3 , 34, 3 ,
+				14, 5 , 0 , 1 , 9 , 18]
+
+			const A_1 = inverse(A)
+			const B_1 = inverse(B)
+			const C_1 = inverse(C)
+
+			assert.isOk(isIdentity(mult(A_1,A)), true)
+			assert.isNotOk(isIdentity(mult(B_1,B)), false)
+			assert.isOk(isIdentity(mult(C_1,C)), true)
+		})
+	})
+	describe('backward', () => {
+		it.only('Should compute backward substitution on upper triangular matrix equation', () => {
+			const A = [
+				[1,2],
+				[0,4]
+			]
+			const coeffsA = [[4],[5]]
+			const yA = mult(A,coeffsA)
+			const C = [
+				[1, 2 , 3 , 4 , 5 , 6 ],
+				[0, 12, 33, 54, 3 , 4 ],
+				[0, 0 , 17, 43, 61, 2 ],
+				[0, 0 , 0 , 7 , 23, 2 ],
+				[0, 0 , 0 , 0 , 34, 3 ],
+				[0, 0 , 0 , 0 , 0 , 18]]
+			const coeffsC = [[4],[5],[1],[12],[7],[3]]
+			const yC = mult(C,coeffsC)
+
+			const coeffsAbis = backward(A, yA)
+			const coeffsCbis = backward(C, yC)
+
+			assert.deepEqual(coeffsAbis, coeffsA)
+			assert.deepEqual(coeffsCbis, coeffsC)
+		})
+	})
+})

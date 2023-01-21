@@ -1,0 +1,55 @@
+{
+  "name": "@cloudlessopenlabs/ml",
+  "version": "0.0.1",
+  "description": "Set of machine learning and linear algebra tools.",
+  "main": "./dist/index.cjs",
+  "exports": {
+    ".": "./dist/index.cjs",
+    "./interpolation": "./src/interpolation/index.mjs",
+    "./interpolation/3d": "./src/interpolation/3d/index.mjs",
+    "./interpolation/3d/bilinear": "./src/interpolation/3d/bilinear.mjs",
+    "./linalg": "./src/linalg/index.mjs",
+    "./linalg/det": "./src/linalg/det.mjs",
+    "./linalg/inverse": "./src/linalg/inverse.mjs",
+    "./linalg/lu": "./src/linalg/lu.mjs",
+    "./linalg/qr": "./src/linalg/qr.mjs",
+    "./linalg/rank": "./src/linalg/rank.mjs",
+    "./linalg/svd": "./src/linalg/svd.mjs",
+    "./package.json": "./package.json"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cloudlesslabs/ml.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cloudlesslabs/ml/issues"
+  },
+  "homepage": "https://github.com/cloudlesslabs/ml#readme",
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "TZ=UTC NODE_ENV=dev node index.js",
+    "lint": "eslint rollup.config.js src/ test/ --fix --ext .mjs",
+    "push": "npm run build && git push --follow-tags origin master && npm publish",
+    "rls": "standard-version --release-as",
+    "start": "TZ=UTC NODE_ENV=production node index.js",
+    "test": "mocha --exit",
+    "v": "node -e \"console.log(require('./package.json').version)\""
+  },
+  "author": "Nicolas Dao",
+  "license": "BSD-3-Clause",
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.0.1",
+    "@tensorflow/tfjs-node": "^4.2.0",
+    "chai": "^4.3.6",
+    "eslint": "^8.30.0",
+    "mocha": "^10.2.0",
+    "rollup": "^2.58.0",
+    "rollup-plugin-multi-input": "^1.3.1",
+    "standard-version": "^9.5.0"
+  },
+  "dependencies": {
+    "@rayyamhk/matrix": "^1.0.8",
+    "puffy-core": "^0.7.2",
+    "svd-js": "^1.1.1"
+  }
+}
