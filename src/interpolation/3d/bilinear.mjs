@@ -64,6 +64,8 @@ const _get3DlineFn = (p1,p2) => {
 	}
 }
 
+const _notNumber = n => typeof(n) != 'number' || isNaN(n)
+
 /**
  * Interpolates the z value given a new point (x,y) and 4 training 3D points.
  * 
@@ -83,7 +85,7 @@ export default function interpolate(points) {
 			throw e('\'points\' argument cannot be empty')
 		if (l < 4)
 			throw e('\'points\' argument must be an array with at least 4 points')
-		const invalidIndex = points.findIndex(({ x,y,z }) => typeof(x) != 'number' || typeof(y) != 'number' || typeof(z) != 'number')
+		const invalidIndex = points.findIndex(({ x,y,z }) => _notNumber(x) || _notNumber(y) || _notNumber(z))
 		if (invalidIndex >= 0)
 			throw e(`Wrong argument exception. Training points[${invalidIndex}] does not define all required x,y,z properties (${JSON.stringify(points[invalidIndex])})`)
 
@@ -123,7 +125,7 @@ export default function interpolate(points) {
 				if (!point)
 					throw e('Missing required \'point\' argument')
 
-				if (typeof(point.x) != 'number' || typeof(point.y) != 'number')
+				if (_notNumber(point.x) || _notNumber(point.y))
 					throw e(`Wrong argument exception. 'point' does not define all required x,y properties (${JSON.stringify(point)})`)
 
 				if (point.x < p0.x || point.x > p3.x || point.y < py0.y || point.y > py3.y)
