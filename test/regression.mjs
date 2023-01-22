@@ -57,9 +57,17 @@ describe('regression', () => {
 			assert.equal(Math.round(coeffs[2][0]*10)/10, C)
 			assert.equal(Math.round(coeffs[3][0]*10)/10, D)
 		})
+		it.only('Should compute the best approximation based on minimizing the error using gradient descent', () => {
+			const fy01 = x => -5*x + 10
+			const fy02 = x => 3*x - 382
+			const points = Array(100).fill(0).map((_,x) => ([x, x<50 ? fy01(x) : fy02(x)]))
+
+			nonlinear(points, { deg:3, exact:false })
+
+		})
 	})
 	describe('decreaseLinearComplexity', () => {
-		it.only('Should decreased the complexity of linear equations when an existing point is provided.', () => {
+		it('Should decreased the complexity of linear equations when an existing point is provided.', () => {
 			const A = 5
 			const B = -0.5
 			const C = 4

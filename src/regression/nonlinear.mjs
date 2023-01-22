@@ -7,6 +7,8 @@
 */
 
 import { catchErrors, wrapErrors as e, mergeErrors } from 'puffy-core/error'
+import { sortBy } from 'puffy-core/collection'
+import { percentile } from 'puffy-core/math'
 import qr from '../linalg/qr.mjs'
 import backward from '../linalg/backward.mjs'
 import { isZero, mult, transpose } from '../matrix/utils.mjs'
@@ -109,9 +111,6 @@ export const decreaseLinearComplexity = (components, point) => {
 		return resp
 }
 
-
-
-
 /**
  * Determines the coefficients of linear and nonlinear equations based on the number of points provided.
  * 
@@ -120,7 +119,6 @@ export const decreaseLinearComplexity = (components, point) => {
  * @param	{Number}		[1]				y value
  * @param	{Object}	options
  * @param	{Number}		.deg			Default 1
- * @param	{Boolean}		.exact			Default true. When true, an error is thrown if not enough points are provided to resolve the system.
  * @param	{[Function]}	.components		Equation components (1). When defined, it overides options.deg
  * @param	{Function}		.getNextCoeff	Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
  * 
@@ -131,18 +129,18 @@ export const decreaseLinearComplexity = (components, point) => {
  * 	- Ax^2 + Bx + c = y -> [x => x**2, x => x, , x => 1]
  * 	- Ax^3 + Bx^2 + cx + d = y -> [x => x**3, x => x**2, x => x, , x => 1]
  */
-export default function (points, options) {
+const nonlinearRegression = (points, options) => {
 	const [errors, resp] = catchErrors('Failed to compute nonlinear regression', () => {
 		const pointsSize = (points||[]).length
 		if (!pointsSize)
 			throw e('Missing required \'points\' argument.')
 
-		const { deg:_deg=1, exact=true, components:_components, getNextCoeff } = options || {}
+		const { deg:_deg=1, components:_components, getNextCoeff } = options || {}
 		const compDeg = (_components||[]).length
 		const deg = compDeg ? compDeg-1 : _deg
 		const size = deg+1
 
-		if (exact && pointsSize < size)
+		if (pointsSize < size)
 			throw e(`Missing points, not enough data provided. To resolve nonlinear equation of degree ${deg}, at least ${size} points must be provided. Found ${pointsSize} instead.`)
 
 		const components = compDeg ? _components : getPolynomeComponents(deg)
@@ -191,6 +189,127 @@ export default function (points, options) {
 		throw mergeErrors(errors)
 	else
 		return resp
+}
+
+/**
+ * Determines the coefficients of linear and nonlinear equations based on the number of points provided.
+ * 
+ * @param	{[Object]}	points[]
+ * @param	{Number}		[0]				x value
+ * @param	{Number}		[1]				y value
+ * @param	{Object}	options
+ * @param	{Number}		.deg			Default 1
+ * @param	{Boolean}		.exact			Default true. When true, an error is thrown if not enough points are provided to resolve the system.
+ * @param	{[Function]}	.components		Equation components (1). When defined, it overides options.deg
+ * @param	{Function}		.getNextCoeff	Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
+ * 
+ * @return	{[Number]}	coefficients
+ *
+ * (1) Equation's components examples
+ * 	- Ax + B = y -> [x => x, x => 1]
+ * 	- Ax^2 + Bx + c = y -> [x => x**2, x => x, , x => 1]
+ * 	- Ax^3 + Bx^2 + cx + d = y -> [x => x**3, x => x**2, x => x, , x => 1]
+ */
+const nonlinearGradientDescentRegression = (points, options) => {
+	const [errors, resp] = catchErrors('Failed to compute nonlinear regression using iterative gradient descent', () => {
+		const pointsSize = (points||[]).length
+		if (!pointsSize)
+			throw e('Missing required \'points\' argument.')
+
+		const { deg:_deg=1, components:_components, epochs=10, initEpochs=5 } = options || {}
+		const compDeg = (_components||[]).length
+		const deg = compDeg ? compDeg-1 : _deg
+		const size = deg+1
+
+		if (pointsSize < size)
+			throw e(`Missing points, not enough data provided. To resolve nonlinear equation of degree ${deg}, at least ${size} points must be provided. Found ${pointsSize} instead.`)
+
+		const components = compDeg ? _components : getPolynomeComponents(deg)
+
+		const xs = points.map(p => p[0])
+		const sortedPoints = sortBy(points||[], p => p[0])
+		const percentileStep = Math.round(100/size)
+		const pointsZones = Array(size)
+		let endIdx = 0
+		for (let i=0;i<size;i++) {
+			const p = percentile((i+1)*percentileStep)(xs)
+			if (i+1 == size)
+				pointsZones[i] = [endIdx, pointsSize-1]
+			else {
+				const idx = sortedPoints.findIndex(([x]) => x == p)
+				pointsZones[i] = [endIdx, idx]
+				endIdx = idx+1
+			}
+		}
+
+		const getRandomPoints = () => pointsZones.map(([startIdx, endIdx]) => {
+			const i = startIdx + Math.round(Math.random()*(endIdx - startIdx))
+			const p = sortedPoints[i]
+			return p
+		})
+
+		const computeError = fy => {
+			let err = 0
+			for (let i=0;i<pointsSize;i++) {
+				const point = points[i]
+				err += Math.abs(fy(point[0]) - point[1])
+			}
+			return err/pointsSize
+		}
+
+		let bestFit, secondBestFit
+		for (let i=0;i<initEpochs;i++) {
+			const randomPoints = getRandomPoints()
+			const coeffs = nonlinearRegression(randomPoints, options)
+			const fy = x => {
+				let y = 0
+				for(let i=0;i<size;i++)
+					y += coeffs[i][0]*components[i](x)
+				return y
+			}
+
+			const err = computeError(fy)
+			if (!bestFit)
+				bestFit = { err, coeffs }
+			else if (bestFit.err > err) {
+				secondBestFit = { ...bestFit }
+				bestFit = { err, coeffs }
+			} else if (!secondBestFit || secondBestFit.err > err)
+				secondBestFit = { err, coeffs }
+		}
+
+		console.log(bestFit)
+		console.log(secondBestFit)
+
+	})
+	if (errors)
+		throw mergeErrors(errors)
+	else
+		return resp
+}
+
+/**
+ * Determines the coefficients of linear and nonlinear equations based on the number of points provided.
+ * 
+ * @param	{[Object]}	points[]
+ * @param	{Number}		[0]				x value
+ * @param	{Number}		[1]				y value
+ * @param	{Object}	options
+ * @param	{Number}		.deg			Default 1
+ * @param	{Boolean}		.exact			Default true. When true, an error is thrown if not enough points are provided to resolve the system.
+ * @param	{[Function]}	.components		Equation components (1). When defined, it overides options.deg
+ * @param	{Function}		.getNextCoeff	Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
+ * 
+ * @return	{[Number]}	coefficients
+ *
+ * (1) Equation's components examples
+ * 	- Ax + B = y -> [x => x, x => 1]
+ * 	- Ax^2 + Bx + c = y -> [x => x**2, x => x, , x => 1]
+ * 	- Ax^3 + Bx^2 + cx + d = y -> [x => x**3, x => x**2, x => x, , x => 1]
+ */
+export default function (points, options) {
+	const { exact=true } = options || {}
+	return exact ? nonlinearRegression(points, options) : nonlinearGradientDescentRegression(points, options)
 }
 
 
