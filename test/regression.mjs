@@ -61,9 +61,11 @@ describe('regression', () => {
 			const fy01 = x => -5*x + 10
 			const fy02 = x => 3*x - 382
 			const points = Array(100).fill(0).map((_,x) => ([x, x<50 ? fy01(x) : fy02(x)]))
-
-			nonlinear(points, { deg:3, exact:false })
-
+			
+			const { err, coeffs } = nonlinear(points, { deg:3, exact:false, epochs:50, initEpochs:10 })
+			console.log({
+				err, coeffs
+			})
 		})
 	})
 	describe('decreaseLinearComplexity', () => {

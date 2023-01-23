@@ -11,7 +11,11 @@ import { sortBy } from 'puffy-core/collection'
 import { percentile } from 'puffy-core/math'
 import qr from '../linalg/qr.mjs'
 import backward from '../linalg/backward.mjs'
-import { isZero, mult, transpose } from '../matrix/utils.mjs'
+import { isZero, dot, transpose, min, add, mult } from '../matrix/utils.mjs'
+
+const LEARNING_RATE = 0.5
+
+const _void = () => null
 
 export const getPolynomeComponents = (deg=1) => [...Array(deg).fill(0).map((_,i) => !i ? x => x : x => x**(i+1)).reverse(), () => 1]
 
@@ -179,7 +183,7 @@ const nonlinearRegression = (points, options) => {
 		if (!linearIndependance)
 			throw e(`The ${size} points are not linearly independant. The QR decomposition cannot provide a unique solution to regression.`)
 
-		const coefficients = backward(R, mult(transpose(Q),Y))
+		const coefficients = backward(R, dot(transpose(Q),Y))
 		if (getNextCoeff)
 			coefficients.push([getNextCoeff(coefficients)])
 
@@ -212,11 +216,12 @@ const nonlinearRegression = (points, options) => {
  */
 const nonlinearGradientDescentRegression = (points, options) => {
 	const [errors, resp] = catchErrors('Failed to compute nonlinear regression using iterative gradient descent', () => {
+		// Validates the input
 		const pointsSize = (points||[]).length
 		if (!pointsSize)
 			throw e('Missing required \'points\' argument.')
 
-		const { deg:_deg=1, components:_components, epochs=10, initEpochs=5 } = options || {}
+		const { deg:_deg=1, components:_components, epochs=50, initEpochs=5 } = options || {}
 		const compDeg = (_components||[]).length
 		const deg = compDeg ? compDeg-1 : _deg
 		const size = deg+1
@@ -226,6 +231,9 @@ const nonlinearGradientDescentRegression = (points, options) => {
 
 		const components = compDeg ? _components : getPolynomeComponents(deg)
 
+		// Prepares the data so that we can pick stable random points for the next coefficients initialization step.
+		// The procedure consists in sorting (asc) the points on the first axis (e.g., x-axis) and then grouping in 
+		// 'size' zone based on the percentile (e.g., if size is 4, then take 25th, 50th, 75th and 100th percentiles).
 		const xs = points.map(p => p[0])
 		const sortedPoints = sortBy(points||[], p => p[0])
 		const percentileStep = Math.round(100/size)
@@ -248,38 +256,91 @@ const nonlinearGradientDescentRegression = (points, options) => {
 			return p
 		})
 
-		const computeError = fy => {
+		const computeLoss = fy => {
 			let err = 0
 			for (let i=0;i<pointsSize;i++) {
 				const point = points[i]
-				err += Math.abs(fy(point[0]) - point[1])
+				err += (fy(point[0]) - point[1])**2
 			}
-			return err/pointsSize
+			return Math.sqrt(err)/pointsSize
 		}
 
+		// Computes multiple exact fit using random points. This is done to initialize the coefficients vector 
+		// so that the gradient descent (next step) starts as close as possible to a local minimum.
 		let bestFit, secondBestFit
+		const fyCoeffs = coeffs => x => {
+			let y = 0
+			for(let i=0;i<size;i++)
+				y += coeffs[i][0]*components[i](x)
+			return y
+		}
 		for (let i=0;i<initEpochs;i++) {
-			const randomPoints = getRandomPoints()
-			const coeffs = nonlinearRegression(randomPoints, options)
-			const fy = x => {
-				let y = 0
-				for(let i=0;i<size;i++)
-					y += coeffs[i][0]*components[i](x)
-				return y
-			}
+			try {
+				const randomPoints = getRandomPoints()
+				const coeffs = nonlinearRegression(randomPoints, options)
 
-			const err = computeError(fy)
-			if (!bestFit)
-				bestFit = { err, coeffs }
-			else if (bestFit.err > err) {
-				secondBestFit = { ...bestFit }
-				bestFit = { err, coeffs }
-			} else if (!secondBestFit || secondBestFit.err > err)
-				secondBestFit = { err, coeffs }
+				const err = computeLoss(fyCoeffs(coeffs))
+				const fit = { err, coeffs }
+				if (!bestFit)
+					bestFit = fit
+				else if (bestFit.err > err) {
+					secondBestFit = { ...bestFit }
+					bestFit = fit
+				} else if (!secondBestFit || secondBestFit.err > err)
+					secondBestFit = fit
+			} catch(err) {
+				_void(err)
+			}
 		}
 
-		console.log(bestFit)
-		console.log(secondBestFit)
+		if (!secondBestFit) { // Deals with the case where secondBestFit could not be set
+			const newCoeffs = bestFit.coeffs.map(([c]) => ([1.05*c]))
+			const err = computeLoss(fyCoeffs(newCoeffs))
+			const fit = { err, coeffs:newCoeffs }
+			if (bestFit.err > err) {
+				secondBestFit = { ...bestFit }
+				bestFit = fit
+			} else
+				secondBestFit = fit
+		}
+
+		const errDelta = secondBestFit.err-bestFit.err
+		if (isZero(errDelta)) // We've found the best possible fit. No need to perform a gradient descent.
+			return bestFit.coeffs
+
+		let learningRate = LEARNING_RATE,
+			plateauCounter = 0, 
+			plateauLimit = 5
+		for (let i=0;i<epochs;i++) {
+			// Coeff amount that yielded an decrease of 'errDelta' error amount.
+			const gradient = min(secondBestFit.coeffs,bestFit.coeffs)
+			const nextCoeffs = add(bestFit.coeffs, mult(gradient,learningRate))
+			const err = computeLoss(fyCoeffs(nextCoeffs))
+			const fit = { err, coeffs:nextCoeffs }
+			if (bestFit.err > err) {
+				secondBestFit = { ...bestFit }
+				bestFit = fit
+				plateauCounter = 0
+			} else {
+				if (learningRate > 0.2)
+					learningRate -= 0.1
+				else if (learningRate > 0.05)
+					learningRate -= 0.05
+				else if (learningRate > 0.01)
+					learningRate -= 0.01
+				else
+					plateauCounter++
+
+				if (plateauCounter == plateauLimit)
+					break
+				
+				learningRate = Math.round(learningRate*100)/100
+				if (secondBestFit.err > err)
+					secondBestFit = fit
+			}
+		}
+
+		return (bestFit)
 
 	})
 	if (errors)

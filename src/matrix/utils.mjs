@@ -73,12 +73,12 @@ export const generate = (row, col, cb) => {
 
 export const identity = size => generate(size, size, (i, j) => i === j ? 1 : 0)
 
-const _mult = (A, B) => {
+const _dot = (A, B) => {
 	if (!A)
 		throw new Error('Missing required matrix \'A\'')
 
 	if (!B) {
-		A.mult = (...args) => mult(A, ...args)
+		A.dot = (...args) => dot(A, ...args)
 		return A
 	}
 
@@ -100,23 +100,23 @@ const _mult = (A, B) => {
 		}
 	}
 
-	result.mult = (...args) => mult(result, ...args)
+	result.dot = (...args) => dot(result, ...args)
 
 	return result
 }
 
-export const mult = (...args) => {
+export const dot = (...args) => {
 	const l = args.length
 	if (!l)
 		return null
 	if (l == 1)
-		return _mult(args[0])
+		return _dot(args[0])
 	if (l == 2)
-		return _mult(args[0], args[1])
+		return _dot(args[0], args[1])
 
-	let result = _mult(args[0])
+	let result = _dot(args[0])
 	for (let i=1;i<l;i++)
-		result = result.mult(args[i])
+		result = result.dot(args[i])
 
 	return result
 }
@@ -223,23 +223,33 @@ export const isUpperTriangular = A => {
 	return yes
 }
 
+/**
+ * Applies a transform to each (i,j) cell.
+ * 
+ * @param	{Matrix}	A			
+ * @param	{Matrix}	B	
+ * @param	{Function}	transform	(Aij, Bij, i, j) => dosomething
+ * 
+ * @return	{Matrix}	newMatrix
+ */
 export const apply = (A,B,transform) => {
-	if (!A)
+	if (A === null || A === undefined)
 		throw new Error('Missing required matrix \'A\'')
-	if (!B)
+	if (B === null || B === undefined)
 		throw new Error('Missing required matrix \'B\'')
 	if (!transform)
 		throw new Error('Missing required function \'transform\'')
 	const tf = typeof(transform)
 	if (tf != 'function')
 		throw new Error(`Wrong argument exception. 'transform' is expected to be a function. Found ${tf} instead.`)
-	if (!A[0])
-		throw new Error('Wrong argument exception. A cannot be empty')
-	if (!B[0])
-		throw new Error('Wrong argument exception. B cannot be empty')
+	const isMatrixA = A[0] && Array.isArray(A[0])
+	const isMatrixB = B[0] && Array.isArray(B[0])
+
+	if (!isMatrixA && !isMatrixB)
+		throw new Error('Wrong argument exception. A and B cannot be both non-matrix')
 	
-	const [rowA, colA] = [A.length, A[0].length]
-	const [rowB, colB] = [B.length, B[0].length]
+	const [rowA, colA] = isMatrixA ? [A.length, A[0].length] : [B.length, B[0].length]
+	const [rowB, colB] = isMatrixB ? [B.length, B[0].length] : [rowA, colA]
 	
 	if (rowA != rowB)
 		throw new Error('Incompatible matrices size. A does not have the same number of rows as B.')
@@ -249,14 +259,17 @@ export const apply = (A,B,transform) => {
 	const result = Array(rowA).fill(0).map(() => Array(colA))
 	for (let i=0;i<rowA;i++) {
 		const row = result[i]
-		const rA = A[i]
-		const rB = B[i]
-		for (let j=0;j<rowA;j++)
-			row[j] = transform(rA[j], rB[j], i, j)
+		for (let j=0;j<colA;j++)
+			row[j] = transform(isMatrixA ? A[i][j] : A, isMatrixB ? B[i][j] : B, i, j)
 	}
 
 	return result
 }
+
+export const add = (A,B) => apply(A,B, (a,b) => a+b)
+export const min = (A,B) => apply(A,B, (a,b) => a-b)
+export const mult = (A,B) => apply(A,B, (a,b) => a*b)
+export const div = (A,B) => apply(A,B, (a,b) => a/b)
 
 
 

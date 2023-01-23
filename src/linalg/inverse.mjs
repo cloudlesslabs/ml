@@ -7,7 +7,7 @@
 */
 
 import { catchErrors, wrapErrors as e, mergeErrors } from 'puffy-core/error'
-import { reshape, inverseDiag, mult, transpose } from '../matrix/utils.mjs'
+import { reshape, inverseDiag, dot, transpose } from '../matrix/utils.mjs'
 import svd from './svd.mjs'
 
 export default function(data) {
@@ -20,7 +20,7 @@ export default function(data) {
 		const matrix = Array.isArray(data[0]) ? data : reshape(data).matrix
 
 		const [U,V,S] = svd(matrix)
-		return mult(V).mult(inverseDiag(S,{ ignoreZero:true })).mult(transpose(U))
+		return dot(V).dot(inverseDiag(S,{ ignoreZero:true })).dot(transpose(U))
 	})
 	if (errors)
 		throw mergeErrors(errors)

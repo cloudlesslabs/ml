@@ -10,7 +10,7 @@
 // To only run a test, use 'it.only' instead of 'it'.
 
 import { assert } from 'chai'
-import { det, rank, inverse, mult, isIdentity, backward, qr, isUpperTriangular, transpose, apply, isZero } from '../src/linalg/index.mjs'
+import { det, rank, inverse, dot, isIdentity, backward, qr, isUpperTriangular, transpose, apply, isZero } from '../src/linalg/index.mjs'
 // import { default as Matrix } from '@rayyamhk/matrix'
 
 describe('linalg', () => {
@@ -67,9 +67,9 @@ describe('linalg', () => {
 			const B_1 = inverse(B)
 			const C_1 = inverse(C)
 
-			assert.isOk(isIdentity(mult(A_1,A)), true)
-			assert.isNotOk(isIdentity(mult(B_1,B)), false)
-			assert.isOk(isIdentity(mult(C_1,C)), true)
+			assert.isOk(isIdentity(dot(A_1,A)), true)
+			assert.isNotOk(isIdentity(dot(B_1,B)), false)
+			assert.isOk(isIdentity(dot(C_1,C)), true)
 		})
 	})
 	describe('backward', () => {
@@ -79,7 +79,7 @@ describe('linalg', () => {
 				[0,4]
 			]
 			const coeffsA = [[4],[5]]
-			const yA = mult(A,coeffsA)
+			const yA = dot(A,coeffsA)
 			const C = [
 				[1, 2 , 3 , 4 , 5 , 6 ],
 				[0, 12, 33, 54, 3 , 4 ],
@@ -88,7 +88,7 @@ describe('linalg', () => {
 				[0, 0 , 0 , 0 , 34, 3 ],
 				[0, 0 , 0 , 0 , 0 , 18]]
 			const coeffsC = [[4],[5],[1],[12],[7],[3]]
-			const yC = mult(C,coeffsC)
+			const yC = dot(C,coeffsC)
 
 			const coeffsAbis = backward(A, yA)
 			const coeffsCbis = backward(C, yC)
@@ -113,15 +113,15 @@ describe('linalg', () => {
 			const [Qb, Rb] = qr(B)
 			const [Qc, Rc] = qr(C)
 
-			assert.deepEqual(apply(mult(Qa, Ra), A, (a,b) => isZero(a-b) ? 0 : 1), apply(A,A,() => 0))
+			assert.deepEqual(apply(dot(Qa, Ra), A, (a,b) => isZero(a-b) ? 0 : 1), apply(A,A,() => 0))
 			assert.isOk(isUpperTriangular(Ra))
-			assert.isOk(isIdentity(mult(Qa,transpose(Qa))))
-			assert.deepEqual(apply(mult(Qb, Rb), B, (a,b) => isZero(a-b) ? 0 : 1), apply(B,B,() => 0))
+			assert.isOk(isIdentity(dot(Qa,transpose(Qa))))
+			assert.deepEqual(apply(dot(Qb, Rb), B, (a,b) => isZero(a-b) ? 0 : 1), apply(B,B,() => 0))
 			assert.isOk(isUpperTriangular(Rb))
-			assert.isOk(isIdentity(mult(Qb,transpose(Qb))))
-			assert.deepEqual(apply(mult(Qc, Rc), C, (a,b) => isZero(a-b) ? 0 : 1), apply(C,C,() => 0))
+			assert.isOk(isIdentity(dot(Qb,transpose(Qb))))
+			assert.deepEqual(apply(dot(Qc, Rc), C, (a,b) => isZero(a-b) ? 0 : 1), apply(C,C,() => 0))
 			assert.isOk(isUpperTriangular(Rc))
-			assert.isOk(isIdentity(mult(Qc,transpose(Qc))))
+			assert.isOk(isIdentity(dot(Qc,transpose(Qc))))
 		})
 	})
 })
