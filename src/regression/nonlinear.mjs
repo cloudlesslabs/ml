@@ -39,7 +39,7 @@ export const get1stDerivativePolynomeComponents = (deg=1) => Array(deg).fill(0)
  * @return	{Function}			.remap			(points) => newPoints. Applies the 'yMap' function to a set of points
  * @return	{Function}			.resolveCoeffs	(simplifiedCoeffs) => coeff. Once the simplified system is resolved, used them to get the last complex system coeff.
  */
-export const decreaseLinearComplexity = (components, point, options) => {
+const _decreaseLinearComplexity = (components, point) => {
 	const [errors, resp] = catchErrors('Failed to decrease by one the dimension of the linear complexity', () => {
 		if (!components)
 			throw e('Missing required argument \'components\'')
@@ -114,6 +114,60 @@ export const decreaseLinearComplexity = (components, point, options) => {
 			yMap,
 			remap,
 			resolveCoeffs
+		}
+	}) 
+	if (errors)
+		throw mergeErrors(errors)
+	else
+		return resp
+}
+
+/**
+ * Decreases the complexity of a set of linear equations by using a single training point.
+ * 
+ * @param	{[Function]}	components			e.g., a polynome of degree 2 [x => x**2, x => x, , x => 1]
+ * @param	{[Object]}		points[]
+ * @param	{Number}			.x
+ * @param	{Number}			.y
+ * 
+ * @return	{Object}		simplifiedSystem
+ * @return	{[Function]}		.components			
+ * @return	{Function}			.remap			(points) => newPoints. Applies the 'yMap' function to a set of points
+ * @return	{Function}			.resolveCoeffs	(simplifiedCoeffs) => coeff. Once the simplified system is resolved, used them to get the last complex system coeff.
+ */
+export const decreaseLinearComplexity = (components, points, options) => {
+	const [errors, resp] = catchErrors('Failed to decrease the dimensions of the linear complexity', () => {
+		if (!points)
+			throw e('Missing required argument \'points\'')
+		if (!points.length)
+			throw e('Wrong argument exception. \'points\' cannot be empty.')
+		if (!components)
+			throw e('Missing required argument \'components\'')
+		if (!components.length)
+			throw e('\'components\' cannot be empty')
+
+		let constraints = [...points]
+		let copnts = [...components]
+		let expandCoeffsFns = [], remaps = []
+		for (let i=0;i<points.length;i++) {
+			const { components:simplifiedComponents, remap, resolveCoeffs } = _decreaseLinearComplexity(copnts, constraints[i])
+			constraints = remap(constraints)
+			copnts = simplifiedComponents
+			remaps.push(remap)
+			const previousExpandCoeffsFn = expandCoeffsFns.slice(-1)[0]
+			expandCoeffsFns.push(previousExpandCoeffsFn 
+				? coeffs => {
+					const previousCoeffs = resolveCoeffs(coeffs)
+					return previousExpandCoeffsFn(previousCoeffs)
+				}
+				: resolveCoeffs
+			)
+		}
+
+		return {
+			components: copnts,
+			resolveCoeffs: expandCoeffsFns.slice(-1)[0],
+			remap: points => remaps.reduce((acc,fn) => fn(acc), points)
 		}
 	}) 
 	if (errors)
@@ -266,7 +320,7 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 		}
 
 		let points = [..._points],
-			expandCoeffsFns = null
+			resolveCoeffs = null
 		if (pointConstraints && pointConstraints.length) {
 			const l = pointConstraints.length
 			const uniquePointConstraints = {}
@@ -297,25 +351,11 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 			} else if (ll > size)
 				throw e(`Too many point constraints in 'options.pointConstraints'. The degree of the current nonlinear equation is ${deg}. A maximum of ${size} points fully resolve this system.`)
 			else {
-				for (let i=0;i<ll;i++) {
-					const [x,y] = constraints[i]
-					const { components:simplifiedComponents, remap, resolveCoeffs } = decreaseLinearComplexity(components, [x,y])
-					
-					points = remap(points)
-					constraints = remap(constraints)
-					components = simplifiedComponents
-					if (!expandCoeffsFns)
-						expandCoeffsFns = []
-					const previousExpandCoeffsFn = expandCoeffsFns.slice(-1)[0]
-					expandCoeffsFns.push(previousExpandCoeffsFn 
-						? coeffs => {
-							const previousCoeffs = resolveCoeffs(coeffs)
-							return previousExpandCoeffsFn(previousCoeffs)
-						}
-						: resolveCoeffs
-					)
-					size = size-1
-				}
+				const { components:simplifiedComponents, remap, resolveCoeffs:_resolveCoeffs } = decreaseLinearComplexity(components, constraints)
+				points = remap(points)
+				components = simplifiedComponents
+				resolveCoeffs = _resolveCoeffs
+				size = components.length
 			}
 		}
 
@@ -428,8 +468,8 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 			}
 		}
 
-		if (expandCoeffsFns)
-			bestFit.coeffs = expandCoeffsFns.slice(-1)[0](bestFit.coeffs)
+		if (resolveCoeffs)
+			bestFit.coeffs = resolveCoeffs(bestFit.coeffs)
 
 		bestFit.components = __components
 		bestFit.fy = fyComponentsCoeffs(__components)(bestFit.coeffs)

@@ -150,7 +150,7 @@ describe('regression', () => {
 			const points = xs.map(x => ([x,fn(x)]))
 
 			const degree3PolynomeComponents = getPolynomeComponents(2)
-			const { components, remap, resolveCoeffs } = decreaseLinearComplexity(degree3PolynomeComponents, points.slice(-1)[0])
+			const { components, remap, resolveCoeffs } = decreaseLinearComplexity(degree3PolynomeComponents, points.slice(-1))
 			const coeffs = nonlinear(remap(points).slice(0,-1), { components, resolveCoeffs })
 			
 			assert.equal(coeffs.length, 3)
