@@ -17,7 +17,13 @@ const LEARNING_RATE = 0.5
 
 const _void = () => null
 
-export const getPolynomeComponents = (deg=1) => [...Array(deg).fill(0).map((_,i) => !i ? x => x : x => x**(i+1)).reverse(), () => 1]
+export const getPolynomeComponents = (deg=1) => [
+	...Array(deg).fill(0).map((_,i) => !i ? x => x : x => x**(i+1)).reverse(), 
+	() => 1
+]
+export const get1stDerivativePolynomeComponents = (deg=1) => Array(deg).fill(0)
+	.map((_,i) => !i ? () => 1 : i == 1 ? x => 2*x : x => (i+1)*x**i)
+	.reverse()
 
 /**
  * Decreases the complexity of a set of linear equations by using a single training point.
@@ -31,9 +37,9 @@ export const getPolynomeComponents = (deg=1) => [...Array(deg).fill(0).map((_,i)
  * @return	{[Function]}		.components			
  * @return	{Function}			.yMap			(x,y) => newY. This function adjust the point from the original system to fit the simplified system.
  * @return	{Function}			.remap			(points) => newPoints. Applies the 'yMap' function to a set of points
- * @return	{Function}			.getCoeff		(simplifiedCoeffs) => coeff. Once the simplified system is resolved, used them to get the last complex system coeff.
+ * @return	{Function}			.resolveCoeffs	(simplifiedCoeffs) => coeff. Once the simplified system is resolved, used them to get the last complex system coeff.
  */
-export const decreaseLinearComplexity = (components, point) => {
+export const decreaseLinearComplexity = (components, point, options) => {
 	const [errors, resp] = catchErrors('Failed to decrease by one the dimension of the linear complexity', () => {
 		if (!components)
 			throw e('Missing required argument \'components\'')
@@ -61,18 +67,19 @@ export const decreaseLinearComplexity = (components, point) => {
 		const newXis = xis.slice(0,-1).map(v => -v/xn)
 		const newY = y/xn
 
-		const getCoeff = coeffs => {
+		const resolveCoeffs = coeffs => {
 			const [errors, resp] = catchErrors('Failed to remap points to adjust for linear complexity decrease.', () => {
 				if (!coeffs)
 					throw e('Missing required \'coeffs\' matrix')
 				if (coeffs.length != lastIdx)
 					throw e(`Expecting a list of ${lastIdx} coefficients in order to get the ${lastIdx == 1 ? '2nd' : lastIdx == 2 ? '3rd' : `${lastIdx+1}th`} coefficient. Received ${coeffs.length} coefficient(s) instead.`)
-				return coeffs.reduce((acc,c,i) => {
+				const solvedCoeff = coeffs.reduce((acc,c,i) => {
 					const coeff = Array.isArray(c) ? c[0] : c
 					if (typeof(coeff) != 'number' || isNaN(coeff))
 						throw e(`coeffs[${i}]${Array.isArray(c) ? '[0]' : ''} is not a number.`)
 					return acc + coeff*newXis[i]
 				},newY)
+				return [...coeffs, [solvedCoeff]]
 			})
 			if (errors)
 				throw mergeErrors(errors)
@@ -106,7 +113,7 @@ export const decreaseLinearComplexity = (components, point) => {
 			components: newComponents,
 			yMap,
 			remap,
-			getCoeff
+			resolveCoeffs
 		}
 	}) 
 	if (errors)
@@ -124,7 +131,7 @@ export const decreaseLinearComplexity = (components, point) => {
  * @param	{Object}	options
  * @param	{Number}		.deg			Default 1
  * @param	{[Function]}	.components		Equation components (1). When defined, it overides options.deg
- * @param	{Function}		.getNextCoeff	Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
+ * @param	{Function}		.resolveCoeffs	Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
  * 
  * @return	{[Number]}	coefficients
  *
@@ -139,7 +146,7 @@ const nonlinearRegression = (points, options) => {
 		if (!pointsSize)
 			throw e('Missing required \'points\' argument.')
 
-		const { deg:_deg=1, components:_components, getNextCoeff } = options || {}
+		const { deg:_deg=1, components:_components, resolveCoeffs } = options || {}
 		const compDeg = (_components||[]).length
 		const deg = compDeg ? compDeg-1 : _deg
 		const size = deg+1
@@ -184,10 +191,8 @@ const nonlinearRegression = (points, options) => {
 			throw e(`The ${size} points are not linearly independant. The QR decomposition cannot provide a unique solution to regression.`)
 
 		const coefficients = backward(R, dot(transpose(Q),Y))
-		if (getNextCoeff)
-			coefficients.push([getNextCoeff(coefficients)])
 
-		return coefficients
+		return resolveCoeffs ? resolveCoeffs(coefficients) : coefficients
 	})
 	if (errors)
 		throw mergeErrors(errors)
@@ -205,7 +210,7 @@ const nonlinearRegression = (points, options) => {
  * @param	{Number}		.deg				Default 1
  * @param	{Boolean}		.exact				Default true. When true, an error is thrown if not enough points are provided to resolve the system.
  * @param	{[Function]}	.components			Equation components (1). When defined, it overides options.deg
- * @param	{Function}		.getNextCoeff		Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
+ * @param	{Function}		.resolveCoeffs		Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
  * @param	{Function}		.onFit				Callback (fit,epoch) => ... Fired each time a fit is found.
  * @param	{[Object]}		.pointConstraints	Point that the linear equation MUST solve exactly.
  * @param	{Number}			[0]				
@@ -294,7 +299,7 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 			else {
 				for (let i=0;i<ll;i++) {
 					const [x,y] = constraints[i]
-					const { components:simplifiedComponents, remap, getCoeff } = decreaseLinearComplexity(components, [x,y])
+					const { components:simplifiedComponents, remap, resolveCoeffs } = decreaseLinearComplexity(components, [x,y])
 					
 					points = remap(points)
 					constraints = remap(constraints)
@@ -304,10 +309,10 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 					const previousExpandCoeffsFn = expandCoeffsFns.slice(-1)[0]
 					expandCoeffsFns.push(previousExpandCoeffsFn 
 						? coeffs => {
-							const previousCoeffs = [...coeffs, [getCoeff(coeffs)]]
+							const previousCoeffs = resolveCoeffs(coeffs)
 							return previousExpandCoeffsFn(previousCoeffs)
 						}
-						: coeffs => [...coeffs, [getCoeff(coeffs)]]
+						: resolveCoeffs
 					)
 					size = size-1
 				}
@@ -447,7 +452,7 @@ const nonlinearGradientDescentRegression = (_points, options) => {
  * @param	{Number}		.deg			Default 1
  * @param	{Boolean}		.exact			Default true. When true, an error is thrown if not enough points are provided to resolve the system.
  * @param	{[Function]}	.components		Equation components (1). When defined, it overides options.deg
- * @param	{Function}		.getNextCoeff	Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
+ * @param	{Function}		.resolveCoeffs	Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
  * 
  * @return	{[Number]}	coefficients
  *

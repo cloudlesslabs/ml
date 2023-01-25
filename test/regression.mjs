@@ -115,6 +115,30 @@ describe('regression', () => {
 			assert.isOk(isZero(fy(pointConstraints[0][0]) - pointConstraints[0][1]))
 			assert.isOk(isZero(fy(pointConstraints[1][0]) - pointConstraints[1][1]))
 		})
+		// it('Should compute a gradient descent optimization while guaranteeing a 1st derivative constraint', () => {
+		// 	const fy01 = x => -5*x + 10
+		// 	const fy02 = x => 3*x - 382
+		// 	const points = Array(100).fill(0).map((_,x) => ([x, x<50 ? fy01(x) : fy02(x)]))
+		// 	const slopeConstraints = [[...points.slice(0,1)[0],0]]
+			
+		// 	const errors = []
+		// 	const onFit = acc => ({ err }, epoch) => acc.push({ err, epoch })
+
+		// 	const baseOptions = { deg:3, exact:false, epochs:100, initEpochs:10 }
+			
+		// 	const { err, fy, coeffs } = nonlinear(points, { 
+		// 		...baseOptions, 
+		// 		onFit:onFit(errors), 
+		// 		slopeConstraints 
+		// 	})
+
+		// 	assert.equal(coeffs.length, 4)
+		// 	assert.isAtLeast(errors.length, 1)
+		// 	assert.equal(errors[0].epoch, 0)
+		// 	assert.isAtLeast(errors[0].err, err)
+		// 	assert.isOk(isZero(fy(pointConstraints[0][0]) - pointConstraints[0][1]))
+		// 	assert.isOk(isZero(fy(pointConstraints[1][0]) - pointConstraints[1][1]))
+		// })
 	})
 	describe('decreaseLinearComplexity', () => {
 		it('Should decreased the complexity of linear equations when an existing point is provided.', () => {
@@ -126,8 +150,8 @@ describe('regression', () => {
 			const points = xs.map(x => ([x,fn(x)]))
 
 			const degree3PolynomeComponents = getPolynomeComponents(2)
-			const { components, remap, getCoeff } = decreaseLinearComplexity(degree3PolynomeComponents, points.slice(-1)[0])
-			const coeffs = nonlinear(remap(points).slice(0,-1), { components, getNextCoeff:getCoeff})
+			const { components, remap, resolveCoeffs } = decreaseLinearComplexity(degree3PolynomeComponents, points.slice(-1)[0])
+			const coeffs = nonlinear(remap(points).slice(0,-1), { components, resolveCoeffs })
 			
 			assert.equal(coeffs.length, 3)
 			assert.equal(Math.round(coeffs[0][0]*10)/10, A)
