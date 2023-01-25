@@ -272,7 +272,18 @@ export const mult = (A,B) => apply(A,B, (a,b) => a*b)
 export const div = (A,B) => apply(A,B, (a,b) => a/b)
 
 
+export const vectorNorm = A => {
+	if (A === null || A === undefined)
+		throw new Error('Missing required matrix \'A\'')
+	if (!Array.isArray(A))
+		throw new Error('A is not an array')
 
+	let n = 0
+	for (let i=0;i<A.length;i++)
+		n += A[i][0]**2
+
+	return Math.sqrt(n)
+}
 
 
 

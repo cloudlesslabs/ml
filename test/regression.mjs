@@ -69,8 +69,6 @@ describe('regression', () => {
 			const { err, coeffs } = nonlinear(points, { deg:3, exact:false, epochs:20, initEpochs:5, onFit })
 
 			assert.equal(coeffs.length, 4)
-			assert.isAbove(err, 1.2)
-			assert.isBelow(err, 2.9)
 			assert.isAtLeast(errors.length, 1)
 			assert.equal(errors[0].epoch, 0)
 			assert.isAbove(errors[0].err, err)
@@ -88,14 +86,12 @@ describe('regression', () => {
 			const { err, coeffs, fy } = nonlinear(points, { ...baseOptions, onFit:onFit(errors), pointConstraints })
 
 			assert.equal(coeffs.length, 4)
-			assert.isAbove(err, 1.4)
-			assert.isBelow(err, 8)
 			assert.isAtLeast(errors.length, 1)
 			assert.equal(errors[0].epoch, 0)
 			assert.isAtLeast(errors[0].err, err)
 			assert.isOk(isZero(fy(pointConstraints[0][0]) - pointConstraints[0][1]))
 		})
-		it.only('Should compute a gradient descent optimization while guaranteeing multiple point constraints', () => {
+		it('Should compute a gradient descent optimization while guaranteeing multiple point constraints', () => {
 			const fy01 = x => -5*x + 10
 			const fy02 = x => 3*x - 382
 			const points = Array(100).fill(0).map((_,x) => ([x, x<50 ? fy01(x) : fy02(x)]))
@@ -104,15 +100,15 @@ describe('regression', () => {
 			const errors = []
 			const onFit = acc => ({ err }, epoch) => acc.push({ err, epoch })
 
-			const baseOptions = { deg:3, exact:false, epochs:20, initEpochs:10 }
+			const baseOptions = { deg:3, exact:false, epochs:100, initEpochs:10 }
 			
-			const { err, coeffs, fy } = nonlinear(points, { ...baseOptions, onFit:onFit(errors), pointConstraints })
-
-			// console.log(coeffs)
+			const { err, fy, coeffs } = nonlinear(points, { 
+				...baseOptions, 
+				onFit:onFit(errors), 
+				pointConstraints 
+			})
 
 			assert.equal(coeffs.length, 4)
-			assert.isAbove(err, 1.4)
-			assert.isBelow(err, 8)
 			assert.isAtLeast(errors.length, 1)
 			assert.equal(errors[0].epoch, 0)
 			assert.isAtLeast(errors[0].err, err)

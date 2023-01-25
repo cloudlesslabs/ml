@@ -11,7 +11,7 @@ import { sortBy } from 'puffy-core/collection'
 import { percentile } from 'puffy-core/math'
 import qr from '../linalg/qr.mjs'
 import backward from '../linalg/backward.mjs'
-import { isZero, dot, transpose, min, add, mult } from '../matrix/utils.mjs'
+import { isZero, dot, transpose, min, add, mult, vectorNorm } from '../matrix/utils.mjs'
 
 const LEARNING_RATE = 0.5
 
@@ -230,6 +230,7 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 			throw e('Missing required \'points\' argument.')
 
 		const { deg:_deg=1, components:_components, epochs=50, initEpochs=5, onFit, pointConstraints, learningRate:_learningRate } = options || {}
+		const lr = _learningRate || LEARNING_RATE
 		const compDeg = (_components||[]).length
 		const deg = compDeg ? compDeg-1 : _deg
 		let size = deg+1
@@ -256,7 +257,7 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 				const point = points[i]
 				err += (fy(point[0]) - point[1])**2
 			}
-			return Math.sqrt(err)/pointsSize
+			return err/pointsSize
 		}
 
 		let points = [..._points],
@@ -381,21 +382,33 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 		if (isZero(errDelta)) // We've found the best possible fit. No need to perform a gradient descent.
 			return bestFit.coeffs
 
-		let learningRate = _learningRate || LEARNING_RATE,
-			plateauCounter = 0, 
-			plateauLimit = 5
+		let learningRate = lr
 		for (let i=0;i<epochs;i++) {
 			// Coeff amount that yielded an decrease of 'errDelta' error amount.
-			const gradient = min(secondBestFit.coeffs,bestFit.coeffs)
-			const nextCoeffs = add(bestFit.coeffs, mult(gradient,learningRate))
-			const err = computeLoss(fyCoeffs(nextCoeffs))
+			// const gradient = min(bestFit.coeffs,secondBestFit.coeffs)
+			const delta = mult(min(secondBestFit.coeffs,bestFit.coeffs), learningRate)
+			const n = vectorNorm(delta)
+			if (isZero(n))
+				break
+
+			let nextCoeffs = add(bestFit.coeffs, delta)
+			let err = computeLoss(fyCoeffs(nextCoeffs))
+			if (bestFit.err < err) {
+				const nextCoeffs2 = min(bestFit.coeffs, delta)
+				const err2 = computeLoss(fyCoeffs(nextCoeffs2))
+				if (err2 < err) {
+					err = err2
+					nextCoeffs = nextCoeffs2
+				}
+			}
 			const fit = { err, coeffs:nextCoeffs }
+
 			if (bestFit.err > err) {
 				secondBestFit = { ...bestFit }
 				bestFit = fit
 				if (onFit)
 					onFit(bestFit, i+1)
-				plateauCounter = 0
+				learningRate = lr
 			} else {
 				if (learningRate > 0.2)
 					learningRate -= 0.1
@@ -403,11 +416,6 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 					learningRate -= 0.05
 				else if (learningRate > 0.01)
 					learningRate -= 0.01
-				else
-					plateauCounter++
-
-				if (plateauCounter == plateauLimit)
-					break
 				
 				learningRate = Math.round(learningRate*100)/100
 				if (secondBestFit.err > err)
