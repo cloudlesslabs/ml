@@ -8,6 +8,7 @@
 
 // To skip a test, either use 'xit' instead of 'it', or 'describe.skip' instead of 'describe'.
 // To only run a test, use 'it.only' instead of 'it'.
+// Chai assert API: https://www.chaijs.com/api/assert/
 
 import { assert } from 'chai'
 import { reshape } from '../src/matrix/utils.mjs'

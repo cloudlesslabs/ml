@@ -66,7 +66,7 @@ export const decreaseLinearComplexity = (components, point) => {
 				if (!coeffs)
 					throw e('Missing required \'coeffs\' matrix')
 				if (coeffs.length != lastIdx)
-					throw e(`Expecting a list of ${lastIdx} coefficients in order to get the ${lastIdx == 1 ? '2nd' : lastIdx == 2 ? '3rd' : `${lastIdx+1}th`} coefficient.`)
+					throw e(`Expecting a list of ${lastIdx} coefficients in order to get the ${lastIdx == 1 ? '2nd' : lastIdx == 2 ? '3rd' : `${lastIdx+1}th`} coefficient. Received ${coeffs.length} coefficient(s) instead.`)
 				return coeffs.reduce((acc,c,i) => {
 					const coeff = Array.isArray(c) ? c[0] : c
 					if (typeof(coeff) != 'number' || isNaN(coeff))
@@ -199,37 +199,122 @@ const nonlinearRegression = (points, options) => {
  * Determines the coefficients of linear and nonlinear equations based on the number of points provided.
  * 
  * @param	{[Object]}	points[]
- * @param	{Number}		[0]				x value
- * @param	{Number}		[1]				y value
+ * @param	{Number}		[0]					x value
+ * @param	{Number}		[1]					y value
  * @param	{Object}	options
- * @param	{Number}		.deg			Default 1
- * @param	{Boolean}		.exact			Default true. When true, an error is thrown if not enough points are provided to resolve the system.
- * @param	{[Function]}	.components		Equation components (1). When defined, it overides options.deg
- * @param	{Function}		.getNextCoeff	Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
+ * @param	{Number}		.deg				Default 1
+ * @param	{Boolean}		.exact				Default true. When true, an error is thrown if not enough points are provided to resolve the system.
+ * @param	{[Function]}	.components			Equation components (1). When defined, it overides options.deg
+ * @param	{Function}		.getNextCoeff		Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
+ * @param	{Function}		.onFit				Callback (fit,epoch) => ... Fired each time a fit is found.
+ * @param	{[Object]}		.pointConstraints	Point that the linear equation MUST solve exactly.
+ * @param	{Number}			[0]				
+ * @param	{Number}			[1]				
  * 
- * @return	{[Number]}	coefficients
+ * @return	{Number}	bestFit
+ * @return	{Number}		.err
+ * @return	{[[Number]]}	.coeffs
+ * @return	{[Function]}	.components
+ * @return	{Function}		.fy
  *
  * (1) Equation's components examples
  * 	- Ax + B = y -> [x => x, x => 1]
  * 	- Ax^2 + Bx + c = y -> [x => x**2, x => x, , x => 1]
  * 	- Ax^3 + Bx^2 + cx + d = y -> [x => x**3, x => x**2, x => x, , x => 1]
  */
-const nonlinearGradientDescentRegression = (points, options) => {
+const nonlinearGradientDescentRegression = (_points, options) => {
 	const [errors, resp] = catchErrors('Failed to compute nonlinear regression using iterative gradient descent', () => {
 		// Validates the input
-		const pointsSize = (points||[]).length
+		const pointsSize = (_points||[]).length
 		if (!pointsSize)
 			throw e('Missing required \'points\' argument.')
 
-		const { deg:_deg=1, components:_components, epochs=50, initEpochs=5 } = options || {}
+		const { deg:_deg=1, components:_components, epochs=50, initEpochs=5, onFit, pointConstraints, learningRate:_learningRate } = options || {}
 		const compDeg = (_components||[]).length
 		const deg = compDeg ? compDeg-1 : _deg
-		const size = deg+1
+		let size = deg+1
 
 		if (pointsSize < size)
 			throw e(`Missing points, not enough data provided. To resolve nonlinear equation of degree ${deg}, at least ${size} points must be provided. Found ${pointsSize} instead.`)
 
-		const components = compDeg ? _components : getPolynomeComponents(deg)
+		const __components = compDeg ? _components : getPolynomeComponents(deg)
+		let components = __components
+
+		const fyComponentsCoeffs = components => coeffs => {
+			const s = coeffs.length
+			return x => {
+				let y = 0
+				for(let i=0;i<s;i++)
+					y += coeffs[i][0]*components[i](x)
+				return y
+			}
+		}
+
+		const computePointsLoss = points => fy => {
+			let err = 0
+			for (let i=0;i<pointsSize;i++) {
+				const point = points[i]
+				err += (fy(point[0]) - point[1])**2
+			}
+			return Math.sqrt(err)/pointsSize
+		}
+
+		let points = [..._points],
+			expandCoeffsFns = null
+		if (pointConstraints && pointConstraints.length) {
+			const l = pointConstraints.length
+			const uniquePointConstraints = {}
+			for (let i=0;i<l;i++) {
+				if (!Array.isArray(pointConstraints[i]))
+					throw e(`Invalid 'options.pointConstraints[${i}]'. Expecting an array, found ${typeof(pointConstraints[i])} instead.`)
+				const [x,y] = pointConstraints[i]
+				if (typeof(x) != 'number' || isNaN(x) || typeof(y) != 'number' || isNaN(y))
+					throw e(`Invalid 'options.pointConstraints[${i}]'. Expecting an array [x,y] where x and y are both numbers. Found [${x},${y}] instead.`)
+
+				const key = `${x}_${y}`
+				if (!uniquePointConstraints[key])
+					uniquePointConstraints[key] = [x,y]
+			}
+			let constraints = Object.values(uniquePointConstraints)
+			const ll = constraints.length
+			if (size == ll) {
+				const computeLoss = computePointsLoss(points)
+				const coeffs = nonlinearRegression(constraints, { components })
+				const fy = fyComponentsCoeffs(components)(coeffs)
+				const err = computeLoss(fy)
+				return {
+					err,
+					coeffs,
+					components,
+					fy
+				}
+			} else if (ll > size)
+				throw e(`Too many point constraints in 'options.pointConstraints'. The degree of the current nonlinear equation is ${deg}. A maximum of ${size} points fully resolve this system.`)
+			else {
+				for (let i=0;i<ll;i++) {
+					const [x,y] = constraints[i]
+					const { components:simplifiedComponents, remap, getCoeff } = decreaseLinearComplexity(components, [x,y])
+					
+					points = remap(points)
+					constraints = remap(constraints)
+					components = simplifiedComponents
+					if (!expandCoeffsFns)
+						expandCoeffsFns = []
+					const previousExpandCoeffsFn = expandCoeffsFns.slice(-1)[0]
+					expandCoeffsFns.push(previousExpandCoeffsFn 
+						? coeffs => {
+							const previousCoeffs = [...coeffs, [getCoeff(coeffs)]]
+							return previousExpandCoeffsFn(previousCoeffs)
+						}
+						: coeffs => [...coeffs, [getCoeff(coeffs)]]
+					)
+					size = size-1
+				}
+			}
+		}
+
+		const fyCoeffs = fyComponentsCoeffs(components)
+		const computeLoss = computePointsLoss(points)
 
 		// Prepares the data so that we can pick stable random points for the next coefficients initialization step.
 		// The procedure consists in sorting (asc) the points on the first axis (e.g., x-axis) and then grouping in 
@@ -256,28 +341,13 @@ const nonlinearGradientDescentRegression = (points, options) => {
 			return p
 		})
 
-		const computeLoss = fy => {
-			let err = 0
-			for (let i=0;i<pointsSize;i++) {
-				const point = points[i]
-				err += (fy(point[0]) - point[1])**2
-			}
-			return Math.sqrt(err)/pointsSize
-		}
-
 		// Computes multiple exact fit using random points. This is done to initialize the coefficients vector 
 		// so that the gradient descent (next step) starts as close as possible to a local minimum.
 		let bestFit, secondBestFit
-		const fyCoeffs = coeffs => x => {
-			let y = 0
-			for(let i=0;i<size;i++)
-				y += coeffs[i][0]*components[i](x)
-			return y
-		}
 		for (let i=0;i<initEpochs;i++) {
 			try {
 				const randomPoints = getRandomPoints()
-				const coeffs = nonlinearRegression(randomPoints, options)
+				const coeffs = nonlinearRegression(randomPoints, { components })
 
 				const err = computeLoss(fyCoeffs(coeffs))
 				const fit = { err, coeffs }
@@ -304,11 +374,14 @@ const nonlinearGradientDescentRegression = (points, options) => {
 				secondBestFit = fit
 		}
 
+		if (onFit)
+			onFit(bestFit, 0)
+
 		const errDelta = secondBestFit.err-bestFit.err
 		if (isZero(errDelta)) // We've found the best possible fit. No need to perform a gradient descent.
 			return bestFit.coeffs
 
-		let learningRate = LEARNING_RATE,
+		let learningRate = _learningRate || LEARNING_RATE,
 			plateauCounter = 0, 
 			plateauLimit = 5
 		for (let i=0;i<epochs;i++) {
@@ -320,6 +393,8 @@ const nonlinearGradientDescentRegression = (points, options) => {
 			if (bestFit.err > err) {
 				secondBestFit = { ...bestFit }
 				bestFit = fit
+				if (onFit)
+					onFit(bestFit, i+1)
 				plateauCounter = 0
 			} else {
 				if (learningRate > 0.2)
@@ -340,8 +415,13 @@ const nonlinearGradientDescentRegression = (points, options) => {
 			}
 		}
 
-		return (bestFit)
+		if (expandCoeffsFns)
+			bestFit.coeffs = expandCoeffsFns.slice(-1)[0](bestFit.coeffs)
 
+		bestFit.components = __components
+		bestFit.fy = fyComponentsCoeffs(__components)(bestFit.coeffs)
+
+		return (bestFit)
 	})
 	if (errors)
 		throw mergeErrors(errors)
