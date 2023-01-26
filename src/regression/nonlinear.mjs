@@ -54,8 +54,18 @@ const _decreaseLinearComplexity = (components, point) => {
 		if (!dim)
 			throw e('\'components\' cannot be empty')
 
-		if (dim < 2)
-			return [...components]
+		if (dim == 1) {
+			const xn = components[0](x)
+			if (isZero(xn))
+				throw e(`Unstable system. The point [${x},${y}] generates an xN close or equal to zero.`)
+			const coeff = y/xn
+			return {
+				components: [],
+				yMap: (xx,yy) => yy,
+				remap: pts => pts,
+				resolveCoeffs: () => ([[coeff]])
+			}
+		}
 
 		const lastIdx = dim-1
 		const componentN = components[lastIdx]
@@ -143,8 +153,19 @@ export const decreaseLinearComplexity = (components, points, options) => {
 			throw e('Wrong argument exception. \'points\' cannot be empty.')
 		if (!components)
 			throw e('Missing required argument \'components\'')
-		if (!components.length)
+		const dim = components.length
+		if (!dim)
 			throw e('\'components\' cannot be empty')
+
+		const { slopeConstraints } = options || {}
+		const { components:slopeComponents, points:slopes } = slopeConstraints || {}
+		const sl = (slopeComponents||[]).length
+		const spl = (slopes||[]).length
+		if (sl && spl) {
+			if (dim != sl-1)
+				throw e(`Incoherent input. The number of 1st derivative components is expected to be N-1 where N is the number of components. Found ${dim} components and ${sl} 1st derivative instead.`)
+
+		} 
 
 		let constraints = [...points]
 		let copnts = [...components]

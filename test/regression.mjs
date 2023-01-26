@@ -141,7 +141,7 @@ describe('regression', () => {
 		// })
 	})
 	describe('decreaseLinearComplexity', () => {
-		it('Should decreased the complexity of linear equations when an existing point is provided.', () => {
+		it('Should decreased the complexity of nonlinear equations when an existing point is provided.', () => {
 			const A = 5
 			const B = -0.5
 			const C = 4
@@ -153,6 +153,24 @@ describe('regression', () => {
 			const { components, remap, resolveCoeffs } = decreaseLinearComplexity(degree3PolynomeComponents, points.slice(-1))
 			const coeffs = nonlinear(remap(points).slice(0,-1), { components, resolveCoeffs })
 			
+			assert.equal(coeffs.length, 3)
+			assert.equal(Math.round(coeffs[0][0]*10)/10, A)
+			assert.equal(Math.round(coeffs[1][0]*10)/10, B)
+			assert.equal(Math.round(coeffs[2][0]*10)/10, C)
+		})
+		it('Should fully resolve the nonlinear equation regression if enough points are provided.', () => {
+			const A = 5
+			const B = -0.5
+			const C = 4
+			const fn = x => A*x**2 + B*x + C
+			const xs = [0,3,7]
+			const points = xs.map(x => ([x,fn(x)]))
+
+			const degree3PolynomeComponents = getPolynomeComponents(2)
+			const { components, resolveCoeffs } = decreaseLinearComplexity(degree3PolynomeComponents, points)
+			const coeffs = resolveCoeffs()
+			
+			assert.equal(components.length, 0)	
 			assert.equal(coeffs.length, 3)
 			assert.equal(Math.round(coeffs[0][0]*10)/10, A)
 			assert.equal(Math.round(coeffs[1][0]*10)/10, B)
