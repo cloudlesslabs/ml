@@ -11,7 +11,7 @@
 // Chai assert API: https://www.chaijs.com/api/assert/
 
 import { assert } from 'chai'
-import { nonlinear, getPolynomeComponents, decreaseLinearComplexity } from '../src/regression/index.mjs'
+import { nonlinear, getPolynomeComponents, get1stDerivativePolynomeComponents, decreaseLinearComplexity } from '../src/regression/index.mjs'
 import { isZero } from '../src/linalg/index.mjs'
 
 describe('regression', () => {
@@ -149,10 +149,11 @@ describe('regression', () => {
 			const xs = [0,3,7]
 			const points = xs.map(x => ([x,fn(x)]))
 
-			const degree3PolynomeComponents = getPolynomeComponents(2)
-			const { components, remap, resolveCoeffs } = decreaseLinearComplexity(degree3PolynomeComponents, points.slice(-1))
+			const degree2PolynomeComponents = getPolynomeComponents(2)
+			const { components, remap, resolveCoeffs } = decreaseLinearComplexity(degree2PolynomeComponents, points.slice(-1))
 			const coeffs = nonlinear(remap(points).slice(0,-1), { components, resolveCoeffs })
 			
+			assert.equal(components.length, 2)
 			assert.equal(coeffs.length, 3)
 			assert.equal(Math.round(coeffs[0][0]*10)/10, A)
 			assert.equal(Math.round(coeffs[1][0]*10)/10, B)
@@ -166,8 +167,8 @@ describe('regression', () => {
 			const xs = [0,3,7]
 			const points = xs.map(x => ([x,fn(x)]))
 
-			const degree3PolynomeComponents = getPolynomeComponents(2)
-			const { components, resolveCoeffs } = decreaseLinearComplexity(degree3PolynomeComponents, points)
+			const degree2PolynomeComponents = getPolynomeComponents(2)
+			const { components, resolveCoeffs } = decreaseLinearComplexity(degree2PolynomeComponents, points)
 			const coeffs = resolveCoeffs()
 			
 			assert.equal(components.length, 0)	
@@ -175,6 +176,63 @@ describe('regression', () => {
 			assert.equal(Math.round(coeffs[0][0]*10)/10, A)
 			assert.equal(Math.round(coeffs[1][0]*10)/10, B)
 			assert.equal(Math.round(coeffs[2][0]*10)/10, C)
+		})
+		it('Should decreased the complexity of nonlinear equations when a 1st derivative is provided.', () => {
+			const A = 5
+			const B = -0.5
+			const C = 4
+			const fn = x => A*x**2 + B*x + C
+			const xs = [0,3]
+			const points = xs.map(x => ([x,fn(x)]))
+			const slope = [1,10]
+
+			const degree2PolynomeComponents = getPolynomeComponents(2)
+			const degree2Polynome1stDerivativeComponents = get1stDerivativePolynomeComponents(2)
+			const { components, remap, resolveCoeffs } = decreaseLinearComplexity(
+				degree2PolynomeComponents, 
+				null,{
+					slopeConstraints: {
+						components: degree2Polynome1stDerivativeComponents,
+						slopes:[slope]
+					}
+				})
+
+			const coeffs = nonlinear(remap(points), { components, resolveCoeffs })
+			const polynomeEquation = degree2PolynomeComponents.solveEquation(coeffs)
+			const derivativeEquation = degree2Polynome1stDerivativeComponents.solveEquation(coeffs.slice(0,-1))
+			
+			assert.equal(coeffs.length, 3)
+			assert.equal(Math.round(polynomeEquation(xs[0])), fn(xs[0]))
+			assert.equal(Math.round(derivativeEquation(slope[0])), slope[1])
+		})
+		it('Should decreased the complexity of nonlinear equations when multiple 1st derivatives are provided.', () => {
+			const A = 5
+			const B = -0.5
+			const C = 4
+			const fn = x => A*x**2 + B*x + C
+			const xs = [0,3]
+			const points = xs.map(x => ([x,fn(x)]))
+			const slopes = [[1,10],[19/29,0]]
+
+			const degree2PolynomeComponents = getPolynomeComponents(2)
+			const degree2Polynome1stDerivativeComponents = get1stDerivativePolynomeComponents(2)
+			const { resolveCoeffs } = decreaseLinearComplexity(
+				degree2PolynomeComponents, 
+				points, {
+					slopeConstraints: {
+						components: degree2Polynome1stDerivativeComponents,
+						slopes
+					}
+				})
+
+			const coeffs = resolveCoeffs()
+			const polynomeEquation = degree2PolynomeComponents.solveEquation(coeffs)
+			const derivativeEquation = degree2Polynome1stDerivativeComponents.solveEquation(coeffs.slice(0,-1))
+			
+			assert.equal(coeffs.length, 3)
+			assert.equal(Math.round(polynomeEquation(xs[0])), fn(xs[0]))
+			assert.equal(Math.round(derivativeEquation(slopes[0][0])), slopes[0][1])
+			assert.equal(Math.round(derivativeEquation(slopes[1][0])), slopes[1][1])
 		})
 	})
 })

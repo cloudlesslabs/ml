@@ -17,14 +17,6 @@ const LEARNING_RATE = 0.5
 
 const _void = () => null
 
-export const getPolynomeComponents = (deg=1) => [
-	...Array(deg).fill(0).map((_,i) => !i ? x => x : x => x**(i+1)).reverse(), 
-	() => 1
-]
-export const get1stDerivativePolynomeComponents = (deg=1) => Array(deg).fill(0)
-	.map((_,i) => !i ? () => 1 : i == 1 ? x => 2*x : x => (i+1)*x**i)
-	.reverse()
-
 /**
  * Decreases the complexity of a set of linear equations by using a single training point.
  * 
@@ -63,7 +55,8 @@ const _decreaseLinearComplexity = (components, point) => {
 				components: [],
 				yMap: (xx,yy) => yy,
 				remap: pts => pts,
-				resolveCoeffs: () => ([[coeff]])
+				resolveCoeffs: () => ([[coeff]]),
+				updateComponents: () => []
 			}
 		}
 
@@ -98,12 +91,17 @@ const _decreaseLinearComplexity = (components, point) => {
 		}
 
 		const yMap = (xx,yy) => yy - newY*componentN(xx)
-		const newComponents = Array(lastIdx)
-		for (let i=0;i<lastIdx;i++){
-			const fn = components[i]
-			const K = newXis[i]
-			newComponents[i] = v => fn(v) + K*componentN(v)
+		const updateComponents = (components, componentN) => {
+			const l = newXis.length
+			const newComponents = Array(l)	
+			for (let i=0;i<l;i++){
+				const fn = components[i]
+				const K = newXis[i]
+				newComponents[i] = v => fn(v) + K*componentN(v)
+			}
+			return newComponents
 		}
+		const newComponents = updateComponents(components, componentN)
 
 		const remap = pts => {
 			const [errors, resp] = catchErrors('Failed to remap points to adjust for linear complexity decrease.', () => {
@@ -123,13 +121,39 @@ const _decreaseLinearComplexity = (components, point) => {
 			components: newComponents,
 			yMap,
 			remap,
-			resolveCoeffs
+			resolveCoeffs,
+			updateComponents
 		}
 	}) 
 	if (errors)
 		throw mergeErrors(errors)
 	else
 		return resp
+}
+
+const _solveComponentsEquation = components => coeffs => {
+	if (!coeffs)
+		throw new Error('Missing required argument \'coeffs\'')
+	if (coeffs.length != components.length)
+		throw new Error(`Incompatible coefficients array. The coefficients array should have the same length (${coeffs.length}) as the equations components (${components.length}).`)
+
+	return x => coeffs.reduce((acc,[K],i) => acc+K*components[i](x), 0)
+}
+
+export const getPolynomeComponents = (deg=1) => {
+	const components = [
+		...Array(deg).fill(0).map((_,i) => !i ? x => x : x => x**(i+1)).reverse(), 
+		() => 1
+	]
+	components.solveEquation = _solveComponentsEquation(components)
+	return components
+}
+export const get1stDerivativePolynomeComponents = (deg=1) => {
+	const components = Array(deg).fill(0)
+		.map((_,i) => !i ? () => 1 : i == 1 ? x => 2*x : x => (i+1)*x**i)
+		.reverse()
+	components.solveEquation = _solveComponentsEquation(components)
+	return components
 }
 
 /**
@@ -147,10 +171,7 @@ const _decreaseLinearComplexity = (components, point) => {
  */
 export const decreaseLinearComplexity = (components, points, options) => {
 	const [errors, resp] = catchErrors('Failed to decrease the dimensions of the linear complexity', () => {
-		if (!points)
-			throw e('Missing required argument \'points\'')
-		if (!points.length)
-			throw e('Wrong argument exception. \'points\' cannot be empty.')
+		points = points || []
 		if (!components)
 			throw e('Missing required argument \'components\'')
 		const dim = components.length
@@ -158,37 +179,74 @@ export const decreaseLinearComplexity = (components, points, options) => {
 			throw e('\'components\' cannot be empty')
 
 		const { slopeConstraints } = options || {}
-		const { components:slopeComponents, points:slopes } = slopeConstraints || {}
+		const { components:slopeComponents, slopes } = slopeConstraints || {}
 		const sl = (slopeComponents||[]).length
 		const spl = (slopes||[]).length
+		let getSlopeCoeffs
 		if (sl && spl) {
-			if (dim != sl-1)
+			if (dim-1 != sl)
 				throw e(`Incoherent input. The number of 1st derivative components is expected to be N-1 where N is the number of components. Found ${dim} components and ${sl} 1st derivative instead.`)
+			if (spl > sl)
+				throw e(`Overdetermined system. The 1st derivatives form a nonlinear equations system of degree ${sl}, which is fully determined when ${sl} solpes values are provided. Found ${spl} slopes instead.`)
 
+			let slopeComps = [...slopeComponents]
+			let constraints = [...slopes]
+			const expandCoeffsFns = []
+			for (let i=0;i<spl;i++) {
+				const { components:simplifiedComponents, remap, resolveCoeffs, updateComponents } = _decreaseLinearComplexity(slopeComps, constraints[i])
+				constraints = remap(constraints)
+				slopeComps = simplifiedComponents
+				const previousExpandCoeffsFn = expandCoeffsFns.slice(-1)[0]
+				expandCoeffsFns.push(previousExpandCoeffsFn 
+					? coeffs => {
+						const previousCoeffs = resolveCoeffs(coeffs)
+						return previousExpandCoeffsFn(previousCoeffs)
+					}
+					: resolveCoeffs
+				)
+				const [componentN_1, componentN] = components.slice(-2)
+				components = [...updateComponents(components,componentN_1), componentN]
+			}
+
+			getSlopeCoeffs = expandCoeffsFns.slice(-1)[0]
 		} 
 
 		let constraints = [...points]
-		let copnts = [...components]
-		let expandCoeffsFns = [], remaps = []
+		let comps = [...components]
+		const expandCoeffsFns = []
+		const remaps = []
 		for (let i=0;i<points.length;i++) {
-			const { components:simplifiedComponents, remap, resolveCoeffs } = _decreaseLinearComplexity(copnts, constraints[i])
-			constraints = remap(constraints)
-			copnts = simplifiedComponents
-			remaps.push(remap)
-			const previousExpandCoeffsFn = expandCoeffsFns.slice(-1)[0]
-			expandCoeffsFns.push(previousExpandCoeffsFn 
-				? coeffs => {
-					const previousCoeffs = resolveCoeffs(coeffs)
-					return previousExpandCoeffsFn(previousCoeffs)
-				}
-				: resolveCoeffs
-			)
+			if (comps.length) {
+				const { components:simplifiedComponents, remap, resolveCoeffs } = _decreaseLinearComplexity(comps, constraints[i])
+				constraints = remap(constraints)
+				comps = simplifiedComponents
+				remaps.push(remap)
+				const previousExpandCoeffsFn = expandCoeffsFns.slice(-1)[0]
+				expandCoeffsFns.push(previousExpandCoeffsFn 
+					? coeffs => {
+						const previousCoeffs = resolveCoeffs(coeffs)
+						return previousExpandCoeffsFn(previousCoeffs)
+					}
+					: resolveCoeffs
+				)
+			}
 		}
 
+		const getCoeffs = expandCoeffsFns.length ? expandCoeffsFns.slice(-1)[0] : coeffs => coeffs && coeffs.length ? coeffs : [[]]
+		const resolveCoeffs = getSlopeCoeffs
+			? coeffs => {
+				const allCoeffs = getCoeffs(coeffs)
+				const headCoeffs = allCoeffs.slice(0,-1)
+				const lastCoeff = allCoeffs.slice(-1)[0]
+				const completeHeadCoeffs = getSlopeCoeffs(headCoeffs)
+				return [...completeHeadCoeffs, lastCoeff]
+			}
+			: getCoeffs
+
 		return {
-			components: copnts,
-			resolveCoeffs: expandCoeffsFns.slice(-1)[0],
-			remap: points => remaps.reduce((acc,fn) => fn(acc), points)
+			components: comps,
+			resolveCoeffs,
+			remap: remaps.length ? points => remaps.reduce((acc,fn) => fn(acc), points) : points => points
 		}
 	}) 
 	if (errors)
