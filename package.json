@@ -16,6 +16,7 @@
     "./linalg/svd": "./src/linalg/svd.mjs",
     "./regression": "./src/regression/index.mjs",
     "./regression/nonlinear": "./src/regression/nonlinear.mjs",
+    "./tensorflow": "./src/tensorflow/index.mjs",
     "./package.json": "./package.json"
   },
   "repository": {
