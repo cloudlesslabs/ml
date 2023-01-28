@@ -1,6 +1,6 @@
 {
   "name": "@cloudlessopenlabs/ml",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Set of machine learning and linear algebra tools.",
   "main": "./dist/index.cjs",
   "exports": {
