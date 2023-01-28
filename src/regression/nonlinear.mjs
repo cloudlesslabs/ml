@@ -22,8 +22,8 @@ const _void = () => null
  * 
  * @param	{[Function]}	components			e.g., a polynome of degree 2 [x => x**2, x => x, , x => 1]
  * @param	{Object}		point
- * @param	{Number}			.x
- * @param	{Number}			.y
+ * @param	{Number}			[0]				x value
+ * @param	{Number}			[1]				y value
  * 
  * @return	{Object}		simplifiedSystem
  * @return	{[Function]}		.components			
@@ -157,12 +157,97 @@ export const get1stDerivativePolynomeComponents = (deg=1) => {
 }
 
 /**
+ * Determines the coefficients of linear and nonlinear equations based on the number of points provided.
+ * 
+ * @param	{[Object]}	points[]
+ * @param	{Number}		[0]				x value
+ * @param	{Number}		[1]				y value
+ * @param	{Object}	options
+ * @param	{Number}		.deg			Default 1
+ * @param	{[Function]}	.components		Equation components (1). When defined, it overides options.deg
+ * @param	{Function}		.resolveCoeffs	Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
+ * @param	{Object}		.slopeConstraints
+ * @param	{[Function]}		.components
+ * @param	{[Object]}			.slopes
+ * 
+ * @return	{[Number]}	coefficients
+ *
+ * (1) Equation's components examples
+ * 	- Ax + B = y -> [x => x, x => 1]
+ * 	- Ax^2 + Bx + c = y -> [x => x**2, x => x, , x => 1]
+ * 	- Ax^3 + Bx^2 + cx + d = y -> [x => x**3, x => x**2, x => x, , x => 1]
+ */
+const _nonlinearRegression = (points, options) => {
+	const [errors, resp] = catchErrors('Failed to compute nonlinear regression using a set of points', () => {
+		const pointsSize = (points||[]).length
+		if (!pointsSize)
+			throw e('Missing required \'points\' argument.')
+
+		const { deg:_deg=1, components:_components, resolveCoeffs } = options || {}
+		const compDeg = (_components||[]).length
+		const deg = compDeg ? compDeg-1 : _deg
+		const size = deg+1
+
+		if (pointsSize < size)
+			throw e(`Missing points, not enough data provided. To resolve nonlinear equation of degree ${deg}, at least ${size} points must be provided. Found ${pointsSize} instead.`)
+
+		const components = compDeg ? _components : getPolynomeComponents(deg)
+		const invalidCompIdx = components.findIndex(c => typeof(c) != 'function')
+		if (invalidCompIdx >= 0)
+			throw e(`Wrong argument exception. 'options.components' expects an array of function. Found type ${typeof(components[invalidCompIdx])} in 'options.components${invalidCompIdx}'`)
+
+		const A = Array(size).fill(0).map(() => Array(size))
+		const Y = Array(size).fill(0).map(() => ([]))
+		for (let i=0;i<size;i++) {
+			const row = A[i]
+			const [x,y] = points[i]
+			const tx = typeof(x)
+			const ty = typeof(y)
+			if (tx != 'number')
+				throw e(`Wrong argument exception. points[${i}][0] is expected to be a number. Found ${tx} instead.`)
+			if (ty != 'number')
+				throw e(`Wrong argument exception. points[${i}][1] is expected to be a number. Found ${ty} instead.`)
+			Y[i][0] = y
+			for (let j=0;j<size;j++) {
+				const v = components[j](x)
+				const tv = typeof(v)
+				if (tv != 'number')
+					throw e(`Wrong argument exception. Function in components[${j}] is expected to return a number. Found ${tv} instead.`)
+				row[j] = v
+			}
+		}
+
+		const [Q,R] = qr(A)
+		const { linearIndependance } = R.reduce((acc,row,i) => {
+			if (acc.linearIndependance)
+				acc.linearIndependance = !isZero(row[i])
+			return acc
+		}, { linearIndependance:true })
+
+		if (!linearIndependance)
+			throw e(`The ${size} points are not linearly independant. The QR decomposition cannot provide a unique solution to regression.`)
+
+		const coefficients = backward(R, dot(transpose(Q),Y))
+
+		return resolveCoeffs ? resolveCoeffs(coefficients) : coefficients
+	})
+	if (errors)
+		throw mergeErrors(errors)
+	else
+		return resp
+}
+
+/**
  * Decreases the complexity of a set of linear equations by using a single training point.
  * 
  * @param	{[Function]}	components			e.g., a polynome of degree 2 [x => x**2, x => x, , x => 1]
  * @param	{[Object]}		points[]
- * @param	{Number}			.x
- * @param	{Number}			.y
+ * @param	{Number}			[0]				x value
+ * @param	{Number}			[1]				y value
+ * @param	{Object}		options
+ * @param	{Object}			.slopeConstraints
+ * @param	{[Function]}			.components
+ * @param	{[Object]}				.slopes
  * 
  * @return	{Object}		simplifiedSystem
  * @return	{[Function]}		.components			
@@ -265,6 +350,9 @@ export const decreaseLinearComplexity = (components, points, options) => {
  * @param	{Number}		.deg			Default 1
  * @param	{[Function]}	.components		Equation components (1). When defined, it overides options.deg
  * @param	{Function}		.resolveCoeffs	Gets the next coefficients if the system was simplified (same function as output 'getCoeff' of the 'decreaseLinearComplexity' function)
+ * @param	{Object}		.slopeConstraints
+ * @param	{[Function]}		.components
+ * @param	{[Object]}			.slopes
  * 
  * @return	{[Number]}	coefficients
  *
@@ -275,57 +363,32 @@ export const decreaseLinearComplexity = (components, points, options) => {
  */
 const nonlinearRegression = (points, options) => {
 	const [errors, resp] = catchErrors('Failed to compute nonlinear regression', () => {
-		const pointsSize = (points||[]).length
-		if (!pointsSize)
-			throw e('Missing required \'points\' argument.')
 
-		const { deg:_deg=1, components:_components, resolveCoeffs } = options || {}
+		const { deg:_deg=1, components:_components, slopeConstraints } = options || {}
+		const { components:_slopeComponents, slopes } = slopeConstraints || {}
+		const slopesConstraintsExist = (slopes||[]).length
 		const compDeg = (_components||[]).length
 		const deg = compDeg ? compDeg-1 : _deg
-		const size = deg+1
 
-		if (pointsSize < size)
-			throw e(`Missing points, not enough data provided. To resolve nonlinear equation of degree ${deg}, at least ${size} points must be provided. Found ${pointsSize} instead.`)
+		const [components, slopeComponents] = compDeg 
+			? [_components, _slopeComponents] 
+			: [getPolynomeComponents(deg), _slopeComponents || get1stDerivativePolynomeComponents(deg)]
 
-		const components = compDeg ? _components : getPolynomeComponents(deg)
-		const invalidCompIdx = components.findIndex(c => typeof(c) != 'function')
-		if (invalidCompIdx >= 0)
-			throw e(`Wrong argument exception. 'options.components' expects an array of function. Found type ${typeof(components[invalidCompIdx])} in 'options.components${invalidCompIdx}'`)
+		if (slopesConstraintsExist) {
+			if (!slopeComponents || !slopeComponents.length)
+				throw e ('Missing required \'options.slopeConstraints.components\'. When the optional argument \'options.slopeConstraints.slopes\' is defined, this argument is required.')
+			const { components:simplifiedComponents, remap, resolveCoeffs } = decreaseLinearComplexity(components, points, {
+				slopeConstraints: {
+					components: slopeComponents,
+					slopes
+				}
+			})
 
-		const A = Array(size).fill(0).map(() => Array(size))
-		const Y = Array(size).fill(0).map(() => ([]))
-		for (let i=0;i<size;i++) {
-			const row = A[i]
-			const [x,y] = points[i]
-			const tx = typeof(x)
-			const ty = typeof(y)
-			if (tx != 'number')
-				throw e(`Wrong argument exception. points[${i}][0] is expected to be a number. Found ${tx} instead.`)
-			if (ty != 'number')
-				throw e(`Wrong argument exception. points[${i}][1] is expected to be a number. Found ${ty} instead.`)
-			Y[i][0] = y
-			for (let j=0;j<size;j++) {
-				const v = components[j](x)
-				const tv = typeof(v)
-				if (tv != 'number')
-					throw e(`Wrong argument exception. Function in components[${j}] is expected to return a number. Found ${tv} instead.`)
-				row[j] = v
-			}
-		}
-
-		const [Q,R] = qr(A)
-		const { linearIndependance } = R.reduce((acc,row,i) => {
-			if (acc.linearIndependance)
-				acc.linearIndependance = !isZero(row[i])
-			return acc
-		}, { linearIndependance:true })
-
-		if (!linearIndependance)
-			throw e(`The ${size} points are not linearly independant. The QR decomposition cannot provide a unique solution to regression.`)
-
-		const coefficients = backward(R, dot(transpose(Q),Y))
-
-		return resolveCoeffs ? resolveCoeffs(coefficients) : coefficients
+			return simplifiedComponents.length
+				? _nonlinearRegression(remap(points), { components:simplifiedComponents, resolveCoeffs })
+				: resolveCoeffs()
+		} else
+			return _nonlinearRegression(points, options)
 	})
 	if (errors)
 		throw mergeErrors(errors)

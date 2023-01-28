@@ -59,6 +59,57 @@ describe('regression', () => {
 			assert.equal(Math.round(coeffs[2][0]*10)/10, C)
 			assert.equal(Math.round(coeffs[3][0]*10)/10, D)
 		})
+		it('Should compute coefficients for linear equation a point and a 1st derivative', () => {
+			const A = 5
+			const B = 4
+			const fn = x => A*x + B
+			const xs = [0,3]
+			const points = xs.map(x => ([x,fn(x)]))
+			const slopes = [[1,5]]
+
+			const coeffs = nonlinear([points[0]], { deg:1, slopeConstraints:{ slopes } })
+			
+			assert.equal(coeffs.length, 2)
+			assert.equal(coeffs[0][0], A)
+			assert.equal(coeffs[1][0], B)
+		})
+		it('Should compute coefficients for quadratic equation using a mix of points and a 1st derivative', () => {
+			const A = 5
+			const B = -0.5
+			const C = 4
+			const fn = x => A*x**2 + B*x + C
+			const xs = [0,3,7]
+			const points = xs.map(x => ([x,fn(x)]))
+			const slopes = [[1,10]]
+
+			const coeffs = nonlinear(points, { deg:2, slopeConstraints:{ slopes } })
+
+			const polynomeEquation = getPolynomeComponents(2).solveEquation(coeffs)
+			const derivativeEquation = get1stDerivativePolynomeComponents(2).solveEquation(coeffs.slice(0,-1))
+			
+			assert.equal(coeffs.length, 3)
+			assert.equal(Math.round(polynomeEquation(xs[0])), fn(xs[0]))
+			assert.equal(Math.round(derivativeEquation(slopes[0][0])), slopes[0][1])
+		})
+		it('Should compute coefficients for quadratic equation using a mix of points and more than one 1st derivative', () => {
+			const A = 5
+			const B = -0.5
+			const C = 4
+			const fn = x => A*x**2 + B*x + C
+			const xs = [0,3,7]
+			const points = xs.map(x => ([x,fn(x)]))
+			const slopes = [[1,10],[19/29,0]]
+
+			const coeffs = nonlinear(points, { deg:2, slopeConstraints:{ slopes } })
+
+			const polynomeEquation = getPolynomeComponents(2).solveEquation(coeffs)
+			const derivativeEquation = get1stDerivativePolynomeComponents(2).solveEquation(coeffs.slice(0,-1))
+			
+			assert.equal(coeffs.length, 3)
+			assert.equal(Math.round(polynomeEquation(xs[0])), fn(xs[0]))
+			assert.equal(Math.round(derivativeEquation(slopes[0][0])), slopes[0][1])
+			assert.equal(Math.round(derivativeEquation(slopes[1][0])), slopes[1][1])
+		})
 		it('Should compute the best approximation based on minimizing the error using gradient descent', () => {
 			const fy01 = x => -5*x + 10
 			const fy02 = x => 3*x - 382
@@ -115,30 +166,6 @@ describe('regression', () => {
 			assert.isOk(isZero(fy(pointConstraints[0][0]) - pointConstraints[0][1]))
 			assert.isOk(isZero(fy(pointConstraints[1][0]) - pointConstraints[1][1]))
 		})
-		// it('Should compute a gradient descent optimization while guaranteeing a 1st derivative constraint', () => {
-		// 	const fy01 = x => -5*x + 10
-		// 	const fy02 = x => 3*x - 382
-		// 	const points = Array(100).fill(0).map((_,x) => ([x, x<50 ? fy01(x) : fy02(x)]))
-		// 	const slopeConstraints = [[...points.slice(0,1)[0],0]]
-			
-		// 	const errors = []
-		// 	const onFit = acc => ({ err }, epoch) => acc.push({ err, epoch })
-
-		// 	const baseOptions = { deg:3, exact:false, epochs:100, initEpochs:10 }
-			
-		// 	const { err, fy, coeffs } = nonlinear(points, { 
-		// 		...baseOptions, 
-		// 		onFit:onFit(errors), 
-		// 		slopeConstraints 
-		// 	})
-
-		// 	assert.equal(coeffs.length, 4)
-		// 	assert.isAtLeast(errors.length, 1)
-		// 	assert.equal(errors[0].epoch, 0)
-		// 	assert.isAtLeast(errors[0].err, err)
-		// 	assert.isOk(isZero(fy(pointConstraints[0][0]) - pointConstraints[0][1]))
-		// 	assert.isOk(isZero(fy(pointConstraints[1][0]) - pointConstraints[1][1]))
-		// })
 	})
 	describe('decreaseLinearComplexity', () => {
 		it('Should decreased the complexity of nonlinear equations when an existing point is provided.', () => {
@@ -184,7 +211,7 @@ describe('regression', () => {
 			const fn = x => A*x**2 + B*x + C
 			const xs = [0,3]
 			const points = xs.map(x => ([x,fn(x)]))
-			const slope = [1,10]
+			const slopes = [[1,10]]
 
 			const degree2PolynomeComponents = getPolynomeComponents(2)
 			const degree2Polynome1stDerivativeComponents = get1stDerivativePolynomeComponents(2)
@@ -193,7 +220,7 @@ describe('regression', () => {
 				null,{
 					slopeConstraints: {
 						components: degree2Polynome1stDerivativeComponents,
-						slopes:[slope]
+						slopes
 					}
 				})
 
@@ -201,11 +228,12 @@ describe('regression', () => {
 			const polynomeEquation = degree2PolynomeComponents.solveEquation(coeffs)
 			const derivativeEquation = degree2Polynome1stDerivativeComponents.solveEquation(coeffs.slice(0,-1))
 			
+			assert.equal(components.length, 2)
 			assert.equal(coeffs.length, 3)
 			assert.equal(Math.round(polynomeEquation(xs[0])), fn(xs[0]))
-			assert.equal(Math.round(derivativeEquation(slope[0])), slope[1])
+			assert.equal(Math.round(derivativeEquation(slopes[0][0])), slopes[0][1])
 		})
-		it('Should decreased the complexity of nonlinear equations when multiple 1st derivatives are provided.', () => {
+		it('Should fully resolve nonlinear equations when enough 1st derivatives are provided.', () => {
 			const A = 5
 			const B = -0.5
 			const C = 4
@@ -216,7 +244,7 @@ describe('regression', () => {
 
 			const degree2PolynomeComponents = getPolynomeComponents(2)
 			const degree2Polynome1stDerivativeComponents = get1stDerivativePolynomeComponents(2)
-			const { resolveCoeffs } = decreaseLinearComplexity(
+			const { components, resolveCoeffs } = decreaseLinearComplexity(
 				degree2PolynomeComponents, 
 				points, {
 					slopeConstraints: {
@@ -229,6 +257,7 @@ describe('regression', () => {
 			const polynomeEquation = degree2PolynomeComponents.solveEquation(coeffs)
 			const derivativeEquation = degree2Polynome1stDerivativeComponents.solveEquation(coeffs.slice(0,-1))
 			
+			assert.equal(components.length, 0)
 			assert.equal(coeffs.length, 3)
 			assert.equal(Math.round(polynomeEquation(xs[0])), fn(xs[0]))
 			assert.equal(Math.round(derivativeEquation(slopes[0][0])), slopes[0][1])
