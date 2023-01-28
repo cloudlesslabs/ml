@@ -11,8 +11,7 @@
 // Chai assert API: https://www.chaijs.com/api/assert/
 
 import { assert } from 'chai'
-import interpolation from '../src/interpolation/index.mjs'
-const { bilinear } = interpolation['3d']
+import { bilinear } from '../src/interpolation/index.mjs'
 
 describe('interpolation/3d', () => {
 	describe('bilinear', () => {

@@ -6,8 +6,7 @@
   "exports": {
     ".": "./dist/index.cjs",
     "./interpolation": "./src/interpolation/index.mjs",
-    "./interpolation/3d": "./src/interpolation/3d/index.mjs",
-    "./interpolation/3d/bilinear": "./src/interpolation/3d/bilinear.mjs",
+    "./interpolation/bilinear": "./src/interpolation/3d/bilinear.mjs",
     "./linalg": "./src/linalg/index.mjs",
     "./linalg/det": "./src/linalg/det.mjs",
     "./linalg/inverse": "./src/linalg/inverse.mjs",

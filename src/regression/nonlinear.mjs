@@ -497,7 +497,7 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 				}
 			} else {
 				if (slopeConstraintsExist && !slopeComponents) 
-					throw e(`Missing required 'options.slopeConstraints.components'. This option is required when both 'options.components' and 'options.slopeConstraints.slopes' are explicitly defined.`)
+					throw e('Missing required \'options.slopeConstraints.components\'. This option is required when both \'options.components\' and \'options.slopeConstraints.slopes\' are explicitly defined.')
 
 				const opts = slopeConstraintsExist 
 					? { slopeConstraints: { ...slopeConstraints, components:slopeComponents } } 
