@@ -410,7 +410,10 @@ const nonlinearRegression = (points, options) => {
  * @param	{Function}		.onFit				Callback (fit,epoch) => ... Fired each time a fit is found.
  * @param	{[Object]}		.pointConstraints	Point that the linear equation MUST solve exactly.
  * @param	{Number}			[0]				
- * @param	{Number}			[1]				
+ * @param	{Number}			[1]		
+ * @param	{Object}		.slopeConstraints
+ * @param	{[Function]}		.components
+ * @param	{[Object]}			.slopes		
  * 
  * @return	{Number}	bestFit
  * @return	{Number}		.err
@@ -430,16 +433,18 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 		if (!pointsSize)
 			throw e('Missing required \'points\' argument.')
 
-		const { deg:_deg=1, components:_components, epochs=50, initEpochs=5, onFit, pointConstraints, learningRate:_learningRate } = options || {}
+		const { deg:_deg=1, components:_components, epochs=50, initEpochs=5, onFit, pointConstraints, slopeConstraints, learningRate:_learningRate } = options || {}
+		const { components:_slopeComponents, slopes } = slopeConstraints || {}
 		const lr = _learningRate || LEARNING_RATE
 		const compDeg = (_components||[]).length
-		const deg = compDeg ? compDeg-1 : _deg
+		const slopeConstraintsExist = slopes && slopes.length
+		let deg = compDeg ? compDeg-1 : _deg
 		let size = deg+1
 
-		if (pointsSize < size)
-			throw e(`Missing points, not enough data provided. To resolve nonlinear equation of degree ${deg}, at least ${size} points must be provided. Found ${pointsSize} instead.`)
+		const [__components, slopeComponents] = compDeg 
+			? [_components, _slopeComponents] 
+			: [getPolynomeComponents(deg), _slopeComponents || get1stDerivativePolynomeComponents(deg)]
 
-		const __components = compDeg ? _components : getPolynomeComponents(deg)
 		let components = __components
 
 		const fyComponentsCoeffs = components => coeffs => {
@@ -463,7 +468,7 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 
 		let points = [..._points],
 			resolveCoeffs = null
-		if (pointConstraints && pointConstraints.length) {
+		if ((pointConstraints && pointConstraints.length) || slopeConstraintsExist) {
 			const l = pointConstraints.length
 			const uniquePointConstraints = {}
 			for (let i=0;i<l;i++) {
@@ -490,19 +495,57 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 					components,
 					fy
 				}
-			} else if (ll > size)
-				throw e(`Too many point constraints in 'options.pointConstraints'. The degree of the current nonlinear equation is ${deg}. A maximum of ${size} points fully resolve this system.`)
-			else {
-				const { components:simplifiedComponents, remap, resolveCoeffs:_resolveCoeffs } = decreaseLinearComplexity(components, constraints)
+			} else {
+				if (slopeConstraintsExist && !slopeComponents) 
+					throw e(`Missing required 'options.slopeConstraints.components'. This option is required when both 'options.components' and 'options.slopeConstraints.slopes' are explicitly defined.`)
+
+				const opts = slopeConstraintsExist 
+					? { slopeConstraints: { ...slopeConstraints, components:slopeComponents } } 
+					: null
+				const { components:simplifiedComponents, remap, resolveCoeffs:_resolveCoeffs } = decreaseLinearComplexity(components, constraints, opts)
 				points = remap(points)
 				components = simplifiedComponents
 				resolveCoeffs = _resolveCoeffs
 				size = components.length
+				deg = size-1
+
+				// If the constraints fully resolve the system, then skip the gradient descent.
+				if (!simplifiedComponents.length) {
+					const coeffs = _resolveCoeffs()
+					const fy = fyComponentsCoeffs(__components)(coeffs)
+					const computeLoss = computePointsLoss(_points)
+					const err = computeLoss(fy)
+					return {
+						err,
+						coeffs,
+						components:__components,
+						fy
+					}
+				}
+
 			}
 		}
 
 		const fyCoeffs = fyComponentsCoeffs(components)
 		const computeLoss = computePointsLoss(points)
+
+		if (pointsSize < size)
+			throw e(`Missing points, not enough data provided. To resolve nonlinear equation of degree ${deg}, at least ${size} points must be provided. Found ${pointsSize} instead.`)
+
+		// If the number of points is exactly the minimum amount of points to resolve the system, then don't bother with gradient
+		// descent and just resolve the system.
+		if (pointsSize == size) {
+			const coeffs = nonlinearRegression(points, { components, resolveCoeffs })
+			const fy = fyComponentsCoeffs(__components)(coeffs)
+			const computeLoss = computePointsLoss(_points)
+			const err = computeLoss(fy)
+			return {
+				err,
+				coeffs,
+				components:__components,
+				fy
+			}
+		}
 
 		// Prepares the data so that we can pick stable random points for the next coefficients initialization step.
 		// The procedure consists in sorting (asc) the points on the first axis (e.g., x-axis) and then grouping in 

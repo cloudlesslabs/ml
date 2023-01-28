@@ -166,6 +166,36 @@ describe('regression', () => {
 			assert.isOk(isZero(fy(pointConstraints[0][0]) - pointConstraints[0][1]))
 			assert.isOk(isZero(fy(pointConstraints[1][0]) - pointConstraints[1][1]))
 		})
+		it('Should compute a gradient descent optimization while guaranteeing multiple point constraints', () => {
+			const fy01 = x => -5*x + 10
+			const fy02 = x => 3*x - 382
+			const points = Array(100).fill(0).map((_,x) => ([x, x<50 ? fy01(x) : fy02(x)]))
+			const pointConstraints = [[200,0]]
+			const slopeConstraints = { slopes:[[200,0]] }
+			
+			const errors = []
+			const onFit = acc => ({ err }, epoch) => {
+				acc.push({ err, epoch })
+			}
+
+			const baseOptions = { deg:3, exact:false, epochs:100, initEpochs:10 }
+			
+			const { err, fy, coeffs } = nonlinear(points, { 
+				...baseOptions, 
+				onFit:onFit(errors), 
+				pointConstraints,
+				slopeConstraints
+			})
+
+			const derivativeEquation = get1stDerivativePolynomeComponents(3).solveEquation(coeffs.slice(0,-1))
+
+			assert.equal(coeffs.length, 4)
+			assert.isAtLeast(errors.length, 1)
+			assert.equal(errors[0].epoch, 0)
+			assert.isAtLeast(errors[0].err, err)
+			assert.isOk(isZero(fy(pointConstraints[0][0]) - pointConstraints[0][1]))
+			assert.isOk(isZero(derivativeEquation(slopeConstraints.slopes[0][0]) - slopeConstraints.slopes[0][1]))
+		})
 	})
 	describe('decreaseLinearComplexity', () => {
 		it('Should decreased the complexity of nonlinear equations when an existing point is provided.', () => {
