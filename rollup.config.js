@@ -7,7 +7,8 @@ export default {
 		dir: 'dist',
 		format: 'cjs',
 		chunkFileNames: '[name]-[hash].cjs',
-		entryFileNames: '[name].cjs'
+		entryFileNames: '[name].cjs',
+		exports: 'named'
 	},
 	plugins:[multiInput(), nodeResolve()]
 }
