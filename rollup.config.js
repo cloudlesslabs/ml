@@ -10,5 +10,13 @@ export default {
 		entryFileNames: '[name].cjs',
 		exports: 'named'
 	},
-	plugins:[multiInput(), nodeResolve()]
+	plugins:[multiInput(), nodeResolve()],
+	external: [
+		'complex.js',
+		'fraction.js',
+		'javascript-natural-sort',
+		'escape-latex',
+		'seedrandom',
+		'tiny-emitter'
+	]
 }
