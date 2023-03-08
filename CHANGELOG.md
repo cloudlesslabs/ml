@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [0.1.0](https://github.com/cloudlesslabs/ml/compare/v0.0.6...v0.1.0) (2023-03-08)
+
+
+### Features
+
+* Add support for signal processing ([63d97b4](https://github.com/cloudlesslabs/ml/commit/63d97b4b44fbfa02d31a497a6327075cfba03443))
+
 ### [0.0.6](https://github.com/cloudlesslabs/ml/compare/v0.0.5...v0.0.6) (2023-01-28)
 
 
