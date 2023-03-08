@@ -18,6 +18,10 @@
     "./linalg/svd": "./src/linalg/svd.mjs",
     "./regression": "./src/regression/index.mjs",
     "./regression/nonlinear": "./src/regression/nonlinear.mjs",
+    "./signal": "./src/signal/index.mjs",
+    "./signal/spectrum": "./src/signal/spectrum.mjs",
+    "./signal/filter": "./src/signal/filter/index.mjs",
+    "./signal/filter/lowpass": "./src/signal/filter/lowpass.mjs",
     "./tensorflow": "./src/tensorflow/index.mjs",
     "./package.json": "./package.json"
   },
@@ -52,7 +56,7 @@
     "standard-version": "^9.5.0"
   },
   "dependencies": {
-    "@rayyamhk/matrix": "^1.0.8",
+    "mathjs": "^11.6.0",
     "puffy-core": "^0.7.2",
     "svd-js": "^1.1.1"
   }
