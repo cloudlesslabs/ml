@@ -608,10 +608,6 @@ const nonlinearGradientDescentRegression = (_points, options) => {
 		if (onFit)
 			onFit(bestFit, 0)
 
-		const errDelta = secondBestFit.err-bestFit.err
-		if (isZero(errDelta)) // We've found the best possible fit. No need to perform a gradient descent.
-			return bestFit.coeffs
-
 		let learningRate = lr
 		for (let i=0;i<epochs;i++) {
 			// Coeff amount that yielded an decrease of 'errDelta' error amount.

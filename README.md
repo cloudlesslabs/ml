@@ -5,6 +5,10 @@ This library implements common machine learning and linear algebra algorithms. I
 - [mathjs](https://mathjs.org): A general Math library. It is used for its FFT and IFFT APIs.
 - [@rayyamhk/matrix (__NOT EXPLICIT__)](https://github.com/rayyamhk/Matrix.js): A lightweight implementation of matrix operations such as QR, LU, eigenvalues, rank... This library is not explicitly used, but bits and pieces of its codebase was used. The reason it could not be used as a dependency is that it did not support ES6 import/export APIs.
 
+```
+npm i @cloudlessopenlabs/ml
+```
+
 __ES6:__
 ```js
 import { backward, det, inverse, lu, qr, rank, svd, matrix } from '@cloudlessopenlabs/ml/linalg'
