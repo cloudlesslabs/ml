@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.1](https://github.com/cloudlesslabs/ml/compare/v0.1.0...v0.1.1) (2023-03-14)
+
+
+### Bug Fixes
+
+* Failed to bundle because some CommonJS cannot be automatically included in the bundle ([8fd30b1](https://github.com/cloudlesslabs/ml/commit/8fd30b134ee077496abd0f0aa236902bab8eb671))
+* Sometimes the nonlinear regression returns no coeffs ([183dd7c](https://github.com/cloudlesslabs/ml/commit/183dd7c39aff44bff0f3d540e71738fda241d59b))
+
 ## [0.1.0](https://github.com/cloudlesslabs/ml/compare/v0.0.6...v0.1.0) (2023-03-08)
 
 
